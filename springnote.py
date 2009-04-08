@@ -1,9 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import os, sys; sys.path.append(os.path.abspath('lib'))
+import env
 
 import oauth
+import simplejson as json
+import httplib
 
 # default consumer token (for springnote python library)
 CONSUMER_TOKEN_KEY    = 'toCVZKJ4WqUw16rnZa9VTA'
@@ -16,7 +18,7 @@ class Springnote:
     ACCESS_TOKEN_URL  = 'https://api.springnote.com/oauth/access_token/springnote'
     AUTHORIZATION_URL = 'https://api.springnote.com/oauth/authorize'
     signature_method  = oauth.OAuthSignatureMethod_HMAC_SHA1()
-    #consumer_token    = oauth.OAuthConsumer(CONSUMER_TOKEN, CONSUMER_SECRET)
+    consumer_token    = oauth.OAuthConsumer(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET)
 
     def __init__(self, consumer_token=(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET), access_token=None):
         """ Springnote 인스턴스를 초기화합니다.
@@ -24,15 +26,15 @@ class Springnote:
          - consumer_token: 개발자가 따로 정의하고 싶은 consumer token을 (key, secret) tuple로 넣어줍니다. 넣지 않으면 라이브러리의 기본 token을 사용합니다.
          - access_token: 이전에 사용자가 승인하여 얻은 access token이 있으면 그것을 바로 넣어줄 수 있습니다. 만료가 되지 않았다면 바로 사용할 수 있습니다.
         """
-        self.consumer_token = oauth.OAuthConsumer(*(consumer_token))
-        self.access_token = None
+        Springnote.consumer_token = oauth.OAuthConsumer(*(consumer_token))
         # already have an access token
+        self.access_token = None
         if access_token:
             #self.access_token = oauth.OAuthToken(*access_token)
             self.set_access_token(*access_token)
 
     def is_authorized(self):
-        self.access_token != None
+        return self.access_token != None
 
     @staticmethod
     def springnote_request(method, url, params={}, headers={}, body=None, sign_token=None, secure=True, verbose=False):

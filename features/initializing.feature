@@ -9,6 +9,7 @@ Scenario: Initializing Springnote with default options
   Given a springnote instance initialized with no arguments
   And   the instance should not be authorized
   And   the consumer token of the instance should set to default
+  And   the instance should fetch request token
   And   the instance should show the url to authorize
 
 

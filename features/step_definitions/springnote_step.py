@@ -1,5 +1,6 @@
 import sys, os; sys.path.append(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
 import springnote
+import types
 
 def given_another_consumer_token_for_another_application():
     pass # nothing to implement
@@ -11,10 +12,18 @@ def given_the_instance_should_not_be_authorized():
     assert self.springnote.is_authorized() == False
 
 def given_the_consumer_token_of_the_instance_should_set_to_default():
-    assert self.springnote.consumer_token == (springnote.CONSUMER_TOKEN_KEY, springnote.CONSUMER_TOKEN_SECRET)
+    token = self.springnote.consumer_token 
+    assert token.key == springnote.CONSUMER_TOKEN_KEY
+    assert token.secret == springnote.CONSUMER_TOKEN_SECRET
+
+def given_the_instance_should_fetch_request_token():
+    self.request_token = self.springnote.fetch_request_token()
+    assert isinstance(self.request_token.key, types.StringType)
+    assert isinstance(self.request_token.secret, types.StringType)
 
 def given_the_instance_should_show_the_url_to_authorize():
-    assert self.springnote.authorize_url() == springnote.AUTHORIZATION_URL
+    url = self.springnote.authorize_url(self.request_token)
+    assert springnote.AUTHORIZATION_URL in url
     
 
 # ------------------------------------------------------------
