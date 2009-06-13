@@ -1,0 +1,47 @@
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/collection
+END
+isdict_containing.py
+K 25
+svn:wc:ra_dav:version-url
+V 88
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/collection/isdict_containing.py
+END
+issequence_containing.py
+K 25
+svn:wc:ra_dav:version-url
+V 92
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/collection/issequence_containing.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/svn/!svn/ver/285/trunk/hamcrest-python/hamcrest/library/collection/__init__.py
+END
+issequence_onlycontaining.py
+K 25
+svn:wc:ra_dav:version-url
+V 96
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/collection/issequence_onlycontaining.py
+END
+isdict_containingkey.py
+K 25
+svn:wc:ra_dav:version-url
+V 91
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/collection/isdict_containingkey.py
+END
+isin.py
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/collection/isin.py
+END
+isdict_containingvalue.py
+K 25
+svn:wc:ra_dav:version-url
+V 93
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/collection/isdict_containingvalue.py
+END

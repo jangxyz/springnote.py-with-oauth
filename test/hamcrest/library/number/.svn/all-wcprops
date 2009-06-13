@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/number
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/svn/!svn/ver/241/trunk/hamcrest-python/hamcrest/library/number/__init__.py
+END
+ordering_comparison.py
+K 25
+svn:wc:ra_dav:version-url
+V 86
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/number/ordering_comparison.py
+END
+iscloseto.py
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/number/iscloseto.py
+END

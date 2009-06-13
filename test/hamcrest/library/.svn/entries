@@ -1,0 +1,52 @@
+8
+
+dir
+439
+http://hamcrest.googlecode.com/svn/trunk/hamcrest-python/hamcrest/library
+http://hamcrest.googlecode.com/svn
+
+
+
+2009-01-23T05:08:53.420128Z
+383
+jon.m.reid
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+2aa0e9f1-8e24-0410-adc4-1b6a3a6e65e2
+
+text
+dir
+
+object
+dir
+
+__init__.py
+file
+
+
+
+
+2009-06-05T15:50:21.000000Z
+7348ebd12f132f06e9cfc153ea29d43b
+2008-07-05T20:51:36.537341Z
+274
+jon.m.reid
+
+number
+dir
+
+collection
+dir
+

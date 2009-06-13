@@ -1,0 +1,71 @@
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core
+END
+is_.py
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/is_.py
+END
+isnone.py
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/isnone.py
+END
+anyof.py
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/anyof.py
+END
+isnot.py
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/isnot.py
+END
+allof.py
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/allof.py
+END
+isanything.py
+K 25
+svn:wc:ra_dav:version-url
+V 72
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/isanything.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 70
+/svn/!svn/ver/241/trunk/hamcrest-python/hamcrest/core/core/__init__.py
+END
+issame.py
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/issame.py
+END
+isequal.py
+K 25
+svn:wc:ra_dav:version-url
+V 69
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/isequal.py
+END
+isinstanceof.py
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/isinstanceof.py
+END
+described_as.py
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/core/described_as.py
+END

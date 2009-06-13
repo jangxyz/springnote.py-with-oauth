@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/!svn/ver/274/trunk/hamcrest-python/hamcrest/core/internal
+END
+hasmethod.py
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/svn/!svn/ver/274/trunk/hamcrest-python/hamcrest/core/internal/hasmethod.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/internal/__init__.py
+END
+selfdescribingvalue.py
+K 25
+svn:wc:ra_dav:version-url
+V 85
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/internal/selfdescribingvalue.py
+END
+wrap_shortcut.py
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/svn/!svn/ver/274/trunk/hamcrest-python/hamcrest/core/internal/wrap_shortcut.py
+END

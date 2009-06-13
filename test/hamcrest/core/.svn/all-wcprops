@@ -1,0 +1,53 @@
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/385/trunk/hamcrest-python/hamcrest/core
+END
+string_description.py
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/string_description.py
+END
+base_matcher.py
+K 25
+svn:wc:ra_dav:version-url
+V 69
+/svn/!svn/ver/385/trunk/hamcrest-python/hamcrest/core/base_matcher.py
+END
+base_description.py
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/base_description.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/__init__.py
+END
+matcher.py
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/core/matcher.py
+END
+description.py
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/description.py
+END
+selfdescribing.py
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/selfdescribing.py
+END
+matcher_assert.py
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/236/trunk/hamcrest-python/hamcrest/core/matcher_assert.py
+END

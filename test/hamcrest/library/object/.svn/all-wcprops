@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/object
+END
+haslength.py
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/object/haslength.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/svn/!svn/ver/274/trunk/hamcrest-python/hamcrest/library/object/__init__.py
+END
+hasstring.py
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/!svn/ver/383/trunk/hamcrest-python/hamcrest/library/object/hasstring.py
+END
