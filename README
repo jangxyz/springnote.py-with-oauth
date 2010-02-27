@@ -1,0 +1,85 @@
+# layout
+
+                       +-------------------------------+
+                       |                               |
+request handler:       | Springnote.springnote_request |        handles oauth and http connection
+                       |                               |
+                       |                   +-------+   |
+                       |                   | oauth |   |        consumer_token, access_token, signature_method, etc.
+                       |  +---------+      +-------+   | 
+                       |  | httplib |                  |        HTTP, GET, content-type, etc.
+                       |  +---------+    +------+      |
+                       |                 | json |      |        json.dumps(data), json.loads(body)
+                       |                 +------+      |
+                       |                               |
+                       +-------------------------------+        
+                                      |                     
+-------------------------------------------------------------   consumer <-> service provider
+                                      |
+                      +---------------------------------+
+service provider:     |         Springnote.com          |       home land. http://jangxyz.springnote.com/pages/56392
+                      +---------------------------------+
+
+--
+
+# about SpringnoteAuth
+
+takes care of authorizing step in springnote. it's final mission is to retrieve
+an access token, with which Springnote can use to request data for.
+
+ 1. fetches request token from springnote
+    >> sn = Springnote()
+    >> request_token = sn.auth.fetch_request_token() # request token is saved internally
+ 2. guide user to authorize at springnote url
+    >> url = sn.auth.authorize_url()
+    >> print 'go to this url and approve', url
+    >> raw_input('Press enter when complete.')
+ 3. exchange signed request token with access token
+    >> sn.auth.fetch_access_token(request_token) # access token is saved internally 
+ *  is_authorized
+ *  
+
+    //
+    sn = Springnote()
+    request_token = sn.auth.fetch_request_token()
+    url = sn.auth.get_authorize_url()
+    print url
+    access_token = sn.auth.fetch_access_token()
+    sn.set_access_token(*access_token)
+    sn.get_page('jangxyz', target, verbose=True)
+   //
+
+
+# about httplib
+
+
+# usage
+ assuming you have the following things ready:
+    >> access_token = oauth.OAuthToken(key, secret) 
+    >> sn = Springnote(access_token=(key, secret) 
+ * get page 123
+        >> http_response = Springnote.springnote_request(
+                "GET", 'http://api.springnote.com/pages/123.json',
+                sign_token=access_token)
+ * get page list
+        >> http_response = Springnote.springnote_request(
+                "GET", 'http://api.springnote.com/pages.json',
+                sign_token=access_token)
+ * create page
+        >> http_response = Springnote.springnote_request(
+                "POST", 'http://api.springnote.com/pages.json',
+                body='{"page": {"title": "test page create", "source": "<p>content</p>", "tags": 'tagged', "relation_is_part_of": null}}',
+                sign_token=access_token)
+ * update page
+        >> http_response = Springnote.springnote_request(
+                "PUT", 'http://api.springnote.com/pages/563952.json',
+                body='{"page": {"title": "test page update", "source": "<p>other content</p>", "tags": 'tagged'}}',
+                sign_token=access_token)
+
+ * delete page
+        >> http_response = Springnote.springnote_request(
+                "DELETE", 'http://api.springnote.com/pages/563952.json',
+                sign_token=access_token)
+
+
+# vim: ft=txt nowrap
