@@ -1,114 +1,206 @@
-#!/usr/bin/python
+#/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import env
+"""
 
-import oauth
+    Springnote API library using OAuth
+
+"""
+VERSION = 0.1
+
+import env 
+
+import oauth, sys
 import simplejson as json
-import httplib
+import httplib, urllib
+import socket
 
-# default consumer token (for springnote python library)
-CONSUMER_TOKEN_KEY    = 'toCVZKJ4WqUw16rnZa9VTA'
-CONSUMER_TOKEN_SECRET = 'KTZAzn4z5sCeqx7tgqagpgeQ4x4pBP9PP7tdZ23QU'
+# default consumer token (as springnote python library)
+# FIXME: change this to make your own consumer!
+CONSUMER_TOKEN_KEY    = '162DSyqm28o355V7zEKw'
+CONSUMER_TOKEN_SECRET = 'MtiDOAWsFkH2yOLzOYkubwFK6THOA5iAJIR4MJnwKMQ'
 
+default_verbose = False
+default_dry_run = False
+
+def is_verbose(is_verbose):
+    if (is_verbose is None and default_verbose is True) or is_verbose is True: return True
+    else: return False
 
 class Springnote:
-    BASEURL           = 'api.springnote.com'
-    REQUEST_TOKEN_URL = 'https://api.springnote.com/oauth/request_token'
-    ACCESS_TOKEN_URL  = 'https://api.springnote.com/oauth/access_token/springnote'
-    AUTHORIZATION_URL = 'https://api.springnote.com/oauth/authorize'
+    ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
+    HOST              = 'api.springnote.com'
+    REQUEST_TOKEN_URL = 'https://%s/oauth/request_token'           % HOST
+    ACCESS_TOKEN_URL  = 'https://%s/oauth/access_token/springnote' % HOST
+    AUTHORIZATION_URL = 'https://%s/oauth/authorize'               % HOST
     signature_method  = oauth.OAuthSignatureMethod_HMAC_SHA1()
     consumer_token    = oauth.OAuthConsumer(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET)
 
-    def __init__(self, consumer_token=(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET), access_token=None):
+    def __init__(self, consumer_token=(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET), access_token=None, verbose=None):
         """ Springnote 인스턴스를 초기화합니다.
         
          - consumer_token: 개발자가 따로 정의하고 싶은 consumer token을 (key, secret) tuple로 넣어줍니다. 넣지 않으면 라이브러리의 기본 token을 사용합니다.
          - access_token: 이전에 사용자가 승인하여 얻은 access token이 있으면 그것을 바로 넣어줄 수 있습니다. 만료가 되지 않았다면 바로 사용할 수 있습니다.
         """
         Springnote.consumer_token = oauth.OAuthConsumer(*(consumer_token))
-        # already have an access token
+        self.auth = self.SpringnoteAuth(self)
+
+        # set access token if already known
         self.access_token = None
         if access_token:
-            #self.access_token = oauth.OAuthToken(*access_token)
             self.set_access_token(*access_token)
 
-    def is_authorized(self):
-        return self.access_token != None
+        self.verbose = verbose
+
 
     @staticmethod
-    def springnote_request(method, url, params={}, headers={}, body=None, sign_token=None, secure=True, verbose=False):
+    def springnote_request(method, url, params={}, headers={}, body=None, sign_token=None, secure=False, verbose=False):
         """ Springnote에서 사용하는 request를 생성합니다. 
-        일반적인 springnote resource 요청 뿐 아니라 
-        oauth 인증을 위해 request token과 access token을 요청할 때도 사용합니다.
+
+        oauth 인증을 위해 request token과 access token을 요청할 때와
+        일반적인 springnote resource 요청할 때 사용합니다.
         """
         # create oauth request
-        oauth_request = oauth.OAuthRequest.from_consumer_and_token(Springnote.consumer_token, sign_token, method, url, params)
-        oauth_request.sign_request(Springnote.signature_method, Springnote.consumer_token, sign_token)
+        oauth_request = oauth.OAuthRequest.from_consumer_and_token(
+            Springnote.consumer_token, sign_token, method, url, params)
+        oauth_request.sign_request(
+            Springnote.signature_method, Springnote.consumer_token, sign_token)
 
-        # merge oauth header with user defined
         headers.update(oauth_request.to_header())
+        if 'content-type' not in map(lambda x: x.lower(),headers.keys()):
+            headers['Content-Type'] = 'application/json'
 
-        #if verbose:
-        #print oauth_request.http_method, oauth_request.http_url, body, headers
+        if is_verbose(verbose):
+            print '>> oauth:'
+            print ' * signature method :', Springnote.signature_method.get_name()
+            print ' * consumer token :', (Springnote.consumer_token.key, Springnote.consumer_token.secret)
+            print ' * sign token :', sign_token #(sign_token.key, sign_token.secret)
+
+            print '>> oauth parameters:'
+            for key in sorted(oauth_request.parameters.keys()):
+                print " *", key, ':', oauth_request.parameters[key]
+
+            print '>> header:'
+            for key, value in headers.iteritems():
+                print " *", key, ':', value
+
+            if body:
+                print '>> body:'
+                print body
+            
+
+            print '>> request:'
+            print oauth_request.http_method, oauth_request.http_url
+            print 'header:', headers
+            if body: print 'body:', body
+            print
 
         # create http(s) connection and request
         if secure:
-            conn = httplib.HTTPSConnection("%s:%d" % (Springnote.BASEURL, 443))
+            conn = httplib.HTTPSConnection(Springnote.HOST)
         else:
-            conn = httplib.HTTPConnection(Springnote.BASEURL)
-        conn.request(oauth_request.http_method, oauth_request.http_url, body=body, headers=headers)
-        return conn
+            conn = httplib.HTTPConnection(Springnote.HOST)
+        try:
+            if not default_dry_run:
+                conn.request(oauth_request.http_method, oauth_request.http_url, body=body, headers=headers)
+        except socket.gaierror:
+            raise SpringnoteError.Network("%s에 접근할 수가 없습니다." % oauth_request.http_url)
+        return conn.getresponse()
 
 
-    def fetch_request_token(self):
-        """ Consumer의 자격으로 Service Provider로부터 request token을 받아옵니다. """
-        conn = self.springnote_request(method='POST', url=self.REQUEST_TOKEN_URL)
-        response = conn.getresponse()
+    class SpringnoteAuth:
+        ''' takes care of authorizing step in springnote. eventually retrieves an access token, 
+        with which Springnote request data.
 
-        if response.status != httplib.OK:
-            raise SpringnoteError.find_error(response)
-        return oauth.OAuthToken.from_string(response.read())
+        The step is used as the following:
+         1. fetches request token from springnote.com
+            >> sn = Springnote()
+            >> request_token = sn.auth.fetch_request_token() 
+            # request token is saved internally
+         2. guide user to authorize at springnote url
+            >> url = sn.auth.authorize_url()
+            >> print 'go to this url and approve', url
+            >> raw_input('Press enter when complete.')
+         3. exchange signed request token with access token
+            >> sn.auth.fetch_access_token(request_token) 
+            # access token is saved internally
+        '''
 
+        def __init__(self, springnote):
+            self.sn = springnote
 
-    def authorize_url(self, token, callback=None):
-        """ Consumer의 자격으로 User에게 request token을 승인받을 url """
-        ret  = "%s?oauth_token=%s" % (self.AUTHORIZATION_URL, token.key)
-        ret += "&oauth_callback=%s" % escape(callback) if callback else ''
-        return ret
+        def fetch_request_token(self, verbose=None):
+            """ consumer의 자격으로 springnote.com으로부터 request token을 받아옵니다.
+            
+            >> request_token = Springnote.fetch_request_token()
+            """
+            response = Springnote.springnote_request(
+                'POST', url=Springnote.REQUEST_TOKEN_URL, secure=True, 
+                verbose=verbose)
 
+            if default_dry_run:
+                self.request_token = oauth.OAuthToken('FAKE_REQUEST_TOKEN_KEY', 'FAKE_REQUEST_TOKEN_SECRET')
+            else:
+                if response.status != httplib.OK:
+                    raise SpringnoteError.Response(response)
+                self.request_token = oauth.OAuthToken.from_string(response.read())
 
-    def fetch_access_token(self, token):
-        """ Consumer의 자격으로 springnote.com으로부터 access token을 받아옵니다.  """
-        conn = self.springnote_request('POST', self.ACCESS_TOKEN_URL, sign_token=token)
-        response = conn.getresponse()
-        if response.status != 200:
-            raise SpringnoteError.find_error(response)
+            if is_verbose(verbose):
+                print "<< request token:", (self.request_token.key, self.request_token.secret)
 
-        access_token = oauth.OAuthToken.from_string(response.read())
-        self.set_access_token(access_token.key, access_token.secret)
-        return self.access_token
+            return self.request_token
+    
+        def authorize_url(self, verbose=None, callback=None):
+            """ request token을 받고 난 뒤, user에게 승인받을 url을 알려줍니다. """
+            if not hasattr(self, 'request_token'):
+                self.fetch_request_token(verbose=verbose)
+    
+            params = { "oauth_token": self.request_token.key }
+            if callback:
+                params["oauth_callback"] = callback
+    
+            url = "%s?%s" % (Springnote.AUTHORIZATION_URL, urllib.urlencode(params))
+            return url
+    
+    
+        def fetch_access_token(self, request_token=None, verbose=None):
+            """ consumer의 자격으로 springnote.com에 request token을 주고 access token을 받아옵니다.
+            access token은 request token이 있어야 하며, fetch_request_token()이 사전에 불렸어야 합니다.
+            """
+            self.request_token = request_token or self.request_token
+            if 'request_token' not in vars(self):
+                sys.stderr.write('you must call fetch_request_token first and approve\n')
+                #self.request_token = self.fetch_request_token()
+                return
+    
+            # request to springnote.com
+            response = Springnote.springnote_request(
+                'POST', Springnote.ACCESS_TOKEN_URL, 
+                sign_token=self.request_token, secure=True, verbose=verbose)
+    
+            if response.status != httplib.OK:
+                raise SpringnoteError.Response(response)
+    
+            access_token = oauth.OAuthToken.from_string(response.read())
+            self.sn.set_access_token(access_token.key, access_token.secret)
+            return access_token
+    
+        def set_access_token(self, token, key):
+            return sn.access_token(token, key)
 
+        def is_authorized(self):
+            """ returns True if has access token
+
+            >> sn = Springnote()
+            >> sn.auth.is_authorized()
+            False
+            """
+            return sn.access_token != None
 
     def set_access_token(self, token, key):
         """ 직접 access token을 지정합니다. """
         self.access_token = oauth.OAuthToken(token, key)
         return self.access_token
-
-    # ---
-
-    def get_page(self, note, id, params={}):
-        """ /pages/:page_id.json에 접근하여 page를 가져옵니다. """
-        params['domain'] = note
-        path  = "/pages/%d.json" % id
-        path += "?%s" % urllib.urlencode(params) if params else ''
-        method = "GET"
-
-        new_page = Page(self.access_token)
-        new_page.request(path, method, params)
-        return new_page
-
-
 
 class SpringnoteError:
     class Base(Exception):
@@ -124,126 +216,118 @@ class SpringnoteError:
                 return '\n'.join(error_msgs)
             else:
                 return self.error
-    class Unauthorized(Base): pass
-    class NotFound(Base):     pass
+    class Network(Base):      pass
 
-    @staticmethod
-    def find_error(response):
-        body = response.read()
-        try:
-            errors = json.loads(body)
-        except ValueError:
-            errors = body
-        if response.status == 401:
-            return SpringnoteError.Unauthorized(errors)
-        elif response.status == 404:
-            return SpringnoteError.NotFound(errors)
-        else:
-            return SpringnoteError.Base(errors)
+    class Response(Base):
+        # status codes and names, extracted from httplib
+        status_map = {100: 'CONTINUE', 101: 'SWITCHING_PROTOCOLS', 
+            102: 'PROCESSING', 200: 'OK', 201: 'CREATED', 202: 'ACCEPTED', 
+            203: 'NON_AUTHORITATIVE_INFORMATION', 204: 'NO_CONTENT', 
+            205: 'RESET_CONTENT', 206: 'PARTIAL_CONTENT', 207: 'MULTI_STATUS', 
+            226: 'IM_USED', 300: 'MULTIPLE_CHOICES', 301: 'MOVED_PERMANENTLY', 
+            302: 'FOUND', 303: 'SEE_OTHER', 304: 'NOT_MODIFIED', 
+            305: 'USE_PROXY', 307: 'TEMPORARY_REDIRECT', 400: 'BAD_REQUEST', 
+            401: 'UNAUTHORIZED', 402: 'PAYMENT_REQUIRED', 403: 'FORBIDDEN', 
+            404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 
+            406: 'NOT_ACCEPTABLE', 407: 'PROXY_AUTHENTICATION_REQUIRED', 
+            408: 'REQUEST_TIMEOUT', 409: 'CONFLICT', 410: 'GONE', 
+            411: 'LENGTH_REQUIRED', 412: 'PRECONDITION_FAILED', 
+            413: 'REQUEST_ENTITY_TOO_LARGE', 414: 'REQUEST_URI_TOO_LONG', 
+            415: 'UNSUPPORTED_MEDIA_TYPE', 
+            416: 'REQUESTED_RANGE_NOT_SATISFIABLE', 417: 'EXPECTATION_FAILED', 
+            422: 'UNPROCESSABLE_ENTITY', 423: 'LOCKED', 
+            424: 'FAILED_DEPENDENCY', 426: 'UPGRADE_REQUIRED', 
+            443: 'HTTPS_PORT', 500: 'INTERNAL_SERVER_ERROR', 
+            501: 'NOT_IMPLEMENTED', 502: 'BAD_GATEWAY', 
+            503: 'SERVICE_UNAVAILABLE', 504: 'GATEWAY_TIMEOUT', 
+            505: 'HTTP_VERSION_NOT_SUPPORTED', 507: 'INSUFFICIENT_STORAGE', 
+            510: 'NOT_EXTENDED'}
+
+        def __init__(self, response):
+            body = response.read()
+            try:
+                errors = json.loads(body)
+            except ValueError:
+                errors = body
+
+            status_name = self.status_map[response.status].replace('_', ' ')
+            self.status = response.status
+            self.error  = "%d %s: %s" % (response.status, status_name, errors)
+
+def main():
+    # parse options
+    argv = sys.argv[1:]
+    verbose = False
+    access_token = None
+    for argument in argv[:]:
+        if argument == '--dry':
+            global default_dry_run
+            default_dry_run = True
+            argv.pop(0)
+        elif argument == '--access-token': # format 'keykeykey:secretsecret'
+            argv.pop(0)
+            access_token = argv.pop(0).split(':')
+        elif argument == '--verbose':
+            verbose = True
+            argv.pop(0)
+
+    if len(argv) < 3:
+        print "Usage:", sys.argv[0], '--dry', 'get', 'page', 123
+        print
+        print " * [--dry|--verbose|--access-token ACCESS_TOKEN:ACCESS_KEY]"
+        print " * get|put|post|delete|search"
+        print " * page|note|attachment|comment"
+        print " * [id]"
+        print 
+        sys.exit()
+
+    if not verbose:
+        sys.stderr.write("you can see more detailed information with --verbose option\n\n")
+    method   = argv[0].upper()
+    resource = argv[1].rstrip('s')
+    target = None
+    if len(argv) >= 3:
+        target = int(argv[2])
+
+    ##
+    print method, resource, target or ''
+    sn = Springnote()
+    # go through authorization process
+    if access_token is None:
+        # 1. receive a request token
+        request_token = sn.auth.fetch_request_token(verbose=verbose)
+        print 'request token received:', (request_token.key, request_token.secret)
+
+        # 2. user approves the request token
+        print 'go to this url and approve:', sn.auth.authorize_url()
+        raw_input('Press enter when complete. ')
+
+        # 3. receive access token
+        access_token = sn.auth.fetch_access_token(request_token, verbose=verbose)
+        access_token_option = '--access-token %s:%s' % (access_token.key, access_token.secret)
+        print 'your access token is ', (access_token.key, access_token.secret)
+        print 'you can save it somewhere else and reuse it later like this:'
+        print ' ', sys.argv[0], access_token_option, method, resource, target or ''
+        print
+    # use given access token
+    else:
+        sn.set_access_token(*access_token)
+    ##
+    if resource == 'page':
+        import pprint
+        if method == 'GET':
+            if target is not None:
+                url = "http://api.springnote.com/pages/%d.json" % target
+                http_response = springnote.Springnote.springnote_request(
+                    "GET", url, sign_token=access_token)
+                pprint.pprint(http_response.read())
+            else:
+                url = "http://api.springnote.com/pages.json"
+                http_response = springnote.Springnote.springnote_request(
+                    "GET", url, sign_token=access_token)
+                pprint.pprint(http_response.read())
 
 
-
-class SpringnoteResource:
-    """ springnote에서 사용하는 리소스의 부모 클래스. 
-        Page, Attachment 등은 이 클래스를 상속합니다. """
-    attributes = [] # 각 리소스가 사용하는 attribute
-
-    def __init__(self, access_token, parent=None):
-        self.access_token = access_token # 모든 request 시에 필요한 access token
-        self.resource = None             # 스프링노트의 리소스를 담는 dictionary 
-        self.raw      = ''               # request의 결과로 가져온 raw data
-        return
-
-    def request(self, path, method="GET", params={}, data=None):
-        """ springnote에 request를 보냅니다. 
-            SpringnoteResource를 상속 받는 모든 하위클래스에서 사용합니다. """
-
-        url = "http://%s/%s" % (Springnote.BASEURL, path.lstrip('/'))
-        headers = {'Content-Type': 'application/json'}
-        # set body, if any
-        if data: 
-            data = {self.__class__.__name__.lower(): data}
-            data = json.dumps(data, ensure_ascii=False)
-            data = data.encode('utf-8')
-
-        conn = Springnote.springnote_request(method, url, params, headers, data, sign_token=self.access_token, secure=False)
-
-        # get response
-        response = conn.getresponse()
-        if response.status != httplib.OK:
-            raise SpringnoteError.find_error(response)
-
-        self.build_from_response(response.read())
-
-    def build_from_response(self, data): 
-        """ springnote의 response에 따라 모델을 만듭니다. 
-
-          - self.raw: response 본문이 저장됩니다.
-          - self.resource: response의 내용이 dictionary 형태로 저장됩니다.
-        """
-        self.raw = data
-        # build proper object
-        object_name = self.__class__.__name__.lower()
-        self.resource = json.loads(data)[object_name]
-
-        #
-        self.process_resource(self.resource)
-
-        return self.resource
-
-    def process_resource(self, resource_dict):
-        """ 각 resource마다 이 메소드를 재정의해서 필요한 후처리를 할 수 있습니다. """
-        # set direct accessor (ex: page.identifier == 2)
-        [setattr(self, key, value) for key, value in resource_dict.iteritems()]
-        # unicode
-        for key, value in resource_dict.iteritems():
-            if isinstance(value, str):
-                setattr(self, key, eval('u"""%s"""' % value))
-        # alias id
-        if "identifier" in resource_dict:
-            setattr(self, "id", resource_dict["identifier"])
-
-class Page(SpringnoteResource):
-    """ 스프링노트의 page에 대한 정보를 가져오거나, 수정할 수 있습니다.
-        page의 하위 리소스에 접근할 수 있도록 해줍니다. """
-    attributes = [
-        "identifier",           # 페이지 고유 ID  예) 2
-        "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
-        "date_modified",        # 페이지 최종 수정 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
-        "rights",               # 페이지에 설정된 Creative Commons License  예) by-nc
-        "creator",              # 페이지 소유자 OpenID
-        "contributor_modified", # 최종 수정자 OpenID
-        "title",                # 페이지 이름  예) TestPage
-        "source",               # 페이지 원본.  예) &lt;p&gt; hello &lt;/p&gt; 
-        "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
-        "tags"                  # 페이지에 붙은 태그  예) tag1,tag2
-    ]
-    writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
-
-    #def __init__(self, access_token, parent=None):
-    #    SpringnoteResource.__init__(self, access_token, parent)
-
-    def process_resource(self, resource_dict):
-        """ +tags를 배열로 변환한다. """
-        SpringnoteResource.process_resource(self, resource_dict)
-        if "tags" in resource_dict:
-            self.tags = filter(None, self.tags.split(','))
-
-    def __writable_resources(self):
-        writable_resource = {}
-        for key, value in self.resource.iteritems():
-            if key in self.writable_attributes:
-                writable_resource[key] = getattr(self, key)
-        # convert list of tags into string
-        if 'tags' in self.resource:
-            writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
-        return writable_resource
-
-    def save(self):
-        """ /pages/:page_id.json에 접근하여 page를 수정합니다. """
-        path = "/pages/%d.json" % self.id
-        method = "PUT"
-
-        self.request(path, method, data=self.__writable_resources())
-        return self
+if __name__ == '__main__':
+    main()
 
