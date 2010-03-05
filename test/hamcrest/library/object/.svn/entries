@@ -1,7 +1,7 @@
-8
+9
 
 dir
-439
+479
 http://hamcrest.googlecode.com/svn/trunk/hamcrest-python/hamcrest/library/object
 http://hamcrest.googlecode.com/svn
 
@@ -32,11 +32,33 @@ file
 
 
 
-2009-06-05T15:50:21.000000Z
+2010-02-05T13:43:10.000000Z
 f03f17c94fd09acf02a24e772e4aa9e4
 2009-01-23T05:08:53.420128Z
 383
 jon.m.reid
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+979
 
 __init__.py
 file
@@ -44,11 +66,33 @@ file
 
 
 
-2009-06-05T15:50:21.000000Z
+2010-02-05T13:43:10.000000Z
 e9239b779f2f316e4c74458afbb532af
 2008-07-05T20:51:36.537341Z
 274
 jon.m.reid
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+116
 
 hasstring.py
 file
@@ -56,9 +100,31 @@ file
 
 
 
-2009-06-05T15:50:21.000000Z
+2010-02-05T13:43:10.000000Z
 2f5abdfe7ec3847b7fa14498485324cc
 2009-01-23T05:08:53.420128Z
 383
 jon.m.reid
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+856
 
