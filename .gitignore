@@ -1,2 +1,5 @@
 *.pyc
 *.swp
+tmp*
+tags
+backup_*/
