@@ -104,6 +104,14 @@ class HttpParamsTestCase(unittest.TestCase):
         #
         self.sn.springnote_request("GET", "http://url.com/", secure=False)
 
+    def calls_special_method_for_posting_attachment(self):
+        """
+            to handle files in body, you springnote_request should call 
+            special method to handle it
+        """
+
+        self.sn.springnote_request("POST")
+        
 
 
 class OauthRequestTestCase(unittest.TestCase):
@@ -183,4 +191,5 @@ class OauthRequestTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+    print __file__
 
