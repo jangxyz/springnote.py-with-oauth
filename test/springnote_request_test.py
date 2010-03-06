@@ -51,15 +51,15 @@ class HttpParamsTestCase(unittest.TestCase):
             .after("HTTPConnection", self.httplib)
         self.conn .expects(once()) .getresponse() .after("request")
 
-        self.sn.springnote_request("GET", "http://url.com", secure=False)
+        self.sn.springnote_request("GET", "http://url.com/data.json", secure=False)
 
     @unittest.test
     def should_pass_method_url_headers_i_gave(self):
         """
-            conn.request("PUT", "http://url.com/", headers={'key': 'value'})
+            conn.request("PUT", "http://url.com/data.json", headers={'key': 'value'})
         """
         http_method = "PUT"
-        url = "http://url.com/"
+        url = "http://url.com/data.json"
         headers = {'header-key': 'value'}
 
         # mock
@@ -88,12 +88,12 @@ class HttpParamsTestCase(unittest.TestCase):
             .after("HTTPSConnection", springnote.httplib)
         conn.expects(once()).getresponse().after("request")
 
-        self.sn.springnote_request("GET", "http://url.com", secure=True)
+        self.sn.springnote_request("GET", "http://url.com/data.json", secure=True)
 
     @unittest.test
     def default_content_type_is_json(self):
         """
-            conn.request("PUT", "http://url.com/", headers={'key': 'value'})
+            conn.request("PUT", "http://url.com/data.json", headers={'key': 'value'})
         """
         json_content_type = {'Content-Type': 'application/json'}
 
@@ -104,35 +104,60 @@ class HttpParamsTestCase(unittest.TestCase):
             .with_at_least(headers=dict_including(json_content_type))
 
         #
-        self.sn.springnote_request("GET", "http://url.com/", secure=False)
+        self.sn.springnote_request("GET", "http://url.com/data.json")
 
-    def calls_special_method_for_posting_attachment(self):
+    @unittest.test
+    def file_object_body_should_be_converted_to_multipart_str(self):
         """
-            to handle files in body, you springnote_request should call 
-            special method to handle it
-        """
+            when a file object is given as a body,
+            it needs to convert to multipart string. 
 
-        self.sn.springnote_request("POST")
+            an example is shown below:
+
+                '--AaB03x\r\n'                                     \
+                'Content-Disposition: form-data; name="Filedata"; filename="filename.py"\r\n' \
+                'Content-Transfer-Encoding: binary\r\n'            \
+                'Content-Type: application/octet-stream\r\n\r\n'   \
+                '*** This is where the content of file is. ***\r\n' \
+                '--AaB03x--\r\n'
+        """
+        data = open(__file__) # open current file just for mock
+        data = Mock()
+        data.name = "test_file.txt"
+        data_content = "** TEST FILE **"
+        data.expects(once()).read().will(return_value(data_content))
+
+        # mock
+        self.httplib.expects(once()).method("HTTPConnection").will(return_value(self.conn))
+        self.conn.expects(once()).getresponse()
+        self.conn.expects(once()).method("request") \
+            .with_at_least(body=string_contains('Content-Disposition: form-data;')) \
+            .with_at_least(body=string_contains('name="Filedata"')) \
+            .with_at_least(body=string_contains('filename="%s"' % data.name)) \
+            .with_at_least(body=string_contains(data_content))
+
+        #
+        self.sn.springnote_request("POST", "http://url.com/data", body=data)
         
 
 
 class OauthRequestTestCase(unittest.TestCase):
     @unittest.test
     def should_have_consumer_token(self):
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com")
+        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json")
         consumer_key = springnote.Springnote.consumer_token.key
         assert_that(oauth_req.parameters['oauth_consumer_key'], is_(consumer_key))
 
     @unittest.test
     def should_take_method_and_url(self):
-        http_method, url = "GET", "http://url.com/"
+        http_method, url = "GET", "http://url.com/data.json"
         oauth_req = springnote.Springnote.oauth_request(http_method, url)
         assert_that(oauth_req.http_method, is_(http_method))
         assert_that(oauth_req.http_url,    is_(url))
 
     @unittest.test
     def should_have_signature_method(self): 
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com")
+        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json")
         consumer_key = springnote.Springnote.consumer_token.key
         assert_that(oauth_req.parameters, has_key('oauth_signature_method'))
         assert_that(oauth_req.parameters, has_key('oauth_signature'))
@@ -140,7 +165,7 @@ class OauthRequestTestCase(unittest.TestCase):
     @unittest.test
     def should_have_basic_oauth_properties(self): 
         token = springnote.oauth.OAuthToken('key', 'secret')
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com", sign_token=token)
+        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json", sign_token=token)
 
         property_names = [ 'oauth_consumer_key', 'oauth_token', 
             'oauth_signature_method', 'oauth_signature', 
@@ -151,7 +176,7 @@ class OauthRequestTestCase(unittest.TestCase):
     @unittest.test
     def access_token_key_should_be_saved_to_sign_consumer_token(self):
         token = springnote.oauth.OAuthToken('key', 'secret')
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com", sign_token=token)
+        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json", sign_token=token)
         assert_that(oauth_req.parameters['oauth_token'], token.key)
 
         
@@ -164,10 +189,9 @@ class OauthRequestTestCase(unittest.TestCase):
             def eval(self, arg):
                 if 'Authorization' not in arg:
                     return False
-
-                property_names = [ 'oauth_consumer_key', 
-                           'oauth_signature_method', 'oauth_signature', 
-                           'oauth_timestamp', 'oauth_nonce', 'oauth_version' ]
+                property_names = [ 'oauth_consumer_key', 'oauth_timestamp', 
+                            'oauth_signature_method', 'oauth_signature', 
+                            'oauth_nonce', 'oauth_version' ]
                 for name in property_names:
                     if "%s=" % name not in arg['Authorization']:
                         return False
@@ -185,7 +209,7 @@ class OauthRequestTestCase(unittest.TestCase):
             .with_at_least(headers=includes_valid_oauth_param())
 
         #
-        springnote.Springnote.springnote_request("GET", "http://url.com/", secure=False)
+        springnote.Springnote.springnote_request("GET", "http://url.com/data.json", secure=False)
 
         # restore 
         restore_httplib_module()
@@ -193,5 +217,4 @@ class OauthRequestTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    print __file__
 

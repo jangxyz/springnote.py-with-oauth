@@ -10,7 +10,7 @@ VERSION = 0.1
 
 import env 
 
-import oauth, sys
+import oauth, sys, types
 import simplejson as json
 import httplib, urllib
 import socket
@@ -28,6 +28,14 @@ def is_verbose(is_verbose):
     else:
         return False
 
+def is_file_type(data):
+     ''' all you need is data.name and data.read() to act as a file '''
+     if not getattr(data, 'name', False):
+          return False
+     if getattr(data, 'read', False) and getattr(data.read, '__call__', False):
+          return True
+     return False
+
 class Springnote:
     ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
     HOST              = 'api.springnote.com'
@@ -36,6 +44,8 @@ class Springnote:
     AUTHORIZATION_URL = 'https://%s/oauth/authorize'               % HOST
     signature_method  = oauth.OAuthSignatureMethod_HMAC_SHA1()
     consumer_token    = oauth.OAuthConsumer(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET)
+
+    BOUNDARY          = 'AaB03x' 
 
     def __init__(self, consumer_token=(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET), access_token=None, verbose=None):
         """ Springnote 인스턴스를 초기화합니다.
@@ -92,11 +102,21 @@ class Springnote:
             method, url, params, \
             sign_token=sign_token, verbose=verbose)
 
+        # set headers
         #if 'content-type' not in map(lambda x: x.lower(), headers.keys()):
         #    headers['Content-Type'] = 'application/json'
         if headers is None:
-            headers = {'Content-Type': 'application/json'}
+            if '.json' in url: 
+                headers = {'Content-Type': 'application/json'}
+            elif method=="POST" and is_file_type(body):
+                headers = {'Content-Type': "multipart/form-data; boundary=%s" % Springnote.BOUNDARY}
+            else:
+                headers = {}
         headers.update(oauth_request.to_header())
+
+        # set body
+        if is_file_type(body):
+            body = Springnote.create_query_multipart_str(body)
 
         if is_verbose(verbose):
             print '>> header:'
@@ -113,7 +133,6 @@ class Springnote:
             if body: print 'body:', body
             print
 
-
         # create http(s) connection and request
         if secure:
             if is_verbose(verbose): print 'using HTTPS'
@@ -121,13 +140,26 @@ class Springnote:
         else:
             conn = httplib.HTTPConnection(Springnote.HOST)
 
+        # response
         try:
             if not default_dry_run:
                 conn.request(oauth_request.http_method, oauth_request.http_url, body=body, headers=headers)
         except socket.gaierror:
             raise SpringnoteError.Network("%s에 접근할 수가 없습니다." % oauth_request.http_url)
-
         return conn.getresponse()
+
+
+    @staticmethod
+    def create_query_multipart_str(data, boundary=BOUNDARY):
+        return "\r\n".join([
+            '--%s' % boundary,
+            'Content-Disposition: form-data; name="Filedata"; filename="%s"' % data.name,
+            'Content-Transfer-Encoding: binary',
+            'Content-Type: application/octet-stream',
+            '',
+            data.read(),
+            '--%s--' % boundary,
+        ])
 
 
     #def fetch_request_token(self, verbose=None):
@@ -290,7 +322,7 @@ class Springnote:
 
     def update_page(self, id, title=None, source=None, tags=None,  relation_is_part_of=None, note=None, params={}, verbose=None):
         """ /pages/:page_id.json에 접근하여 기존 페이지를 수정합니다. """
-        if note:   params['domain'] = note
+        if note:  params['domain'] = note
         path = "/pages/%d.json" % id
         date = {}
         if title:  data['title' ] = title
@@ -350,7 +382,7 @@ class SpringnoteResource:
         self.access_token = access_token # 모든 request 시에 필요한 access token
         self.parent       = parent
         self.resource     = None         # 스프링노트의 리소스를 담는 dictionary 
-        self.raw          = ''           # request의 결과로 가져온 raw data
+        self.raw          = ''            # request의 결과로 가져온 raw data
         return
 
     def request(self, path, method="GET", params={}, data=None, verbose=None):
@@ -514,7 +546,7 @@ class Page(SpringnoteResource):
         self.tags   = tags or self.tags 
         self.relation_is_part_of  = relation_is_part_of or self.relation_is_part_of 
 
-        if self.parent:   params['domain'] = self.parent
+        if self.parent: params['domain'] = self.parent
         path = "/pages.json"
         data = {}
         if self.title:  data['title' ] = self.title
@@ -562,7 +594,7 @@ def main():
         sys.stderr.write("you can see more detailed information with --verbose option\n\n")
     method   = argv[0].upper()
     resource = argv[1].rstrip('s')
-    target = None
+    target   = None
     if len(argv) >= 3:
         target = int(argv[2])
 
