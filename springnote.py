@@ -381,7 +381,7 @@ class SpringnoteResource:
         # send request
         response = Springnote.springnote_request(
                     method=method, url=url, params=params, 
-                    headers=headers, data=data,
+                    headers=headers, body=data,
                     sign_token = self.access_token, 
                     secure     = use_https, 
                     verbose    = verbose

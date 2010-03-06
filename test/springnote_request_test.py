@@ -8,9 +8,11 @@ Test Springnote.springnote_request, by mocking out the actual connection
 
 '''
 import test_env
-import unittest
-from pmock import *; from pmock_xtnd import *
-_object = object; from hamcrest import *; object = _object
+import unittest, types
+from pmock import *
+from pmock_xtnd import *
+
+from hamcrest import *;
 from hamcrest_xtnd import *
 
 import springnote
@@ -157,7 +159,7 @@ class OauthRequestTestCase(unittest.TestCase):
     def oauth_parameters_should_be_packed_in_header(self): 
         """ parameters are joined by comma, and resides in request header under key 'Authorization'
         """
-        class OAuthParamConstraint(object):
+        class OAuthParamConstraint(types.ObjectType):
             def __repr__(self): return "%s.includes_valid_oauth_param()" % __name__
             def eval(self, arg):
                 if 'Authorization' not in arg:
