@@ -31,7 +31,7 @@ class HttpParamsTestCase(unittest.TestCase):
         mock_httplib_module()
         self.conn    = Mock() # mock connection instance
         self.httplib = springnote.httplib
-        self.sn = springnote.Springnote
+        self.sn = springnote.Springnote()
 
     @unittest.teardown
     def restore_httplib(self):
@@ -160,20 +160,20 @@ class HttpParamsTestCase(unittest.TestCase):
 class OauthRequestTestCase(unittest.TestCase):
     @unittest.test
     def should_have_consumer_token(self):
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json")
+        oauth_req = springnote.Springnote().oauth_request("GET", "http://url.com/data.json")
         consumer_key = springnote.Springnote.consumer_token.key
         assert_that(oauth_req.parameters['oauth_consumer_key'], is_(consumer_key))
 
     @unittest.test
     def should_take_method_and_url(self):
         http_method, url = "GET", "http://url.com/data.json"
-        oauth_req = springnote.Springnote.oauth_request(http_method, url)
+        oauth_req = springnote.Springnote().oauth_request(http_method, url)
         assert_that(oauth_req.http_method, is_(http_method))
         assert_that(oauth_req.http_url,    is_(url))
 
     @unittest.test
     def should_have_signature_method(self): 
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json")
+        oauth_req = springnote.Springnote().oauth_request("GET", "http://url.com/data.json")
         consumer_key = springnote.Springnote.consumer_token.key
         assert_that(oauth_req.parameters, has_key('oauth_signature_method'))
         assert_that(oauth_req.parameters, has_key('oauth_signature'))
@@ -181,7 +181,7 @@ class OauthRequestTestCase(unittest.TestCase):
     @unittest.test
     def should_have_basic_oauth_properties(self): 
         token = springnote.oauth.OAuthToken('key', 'secret')
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json", sign_token=token)
+        oauth_req = springnote.Springnote(access_token=token).oauth_request("GET", "http://url.com/data.json")
 
         property_names = [ 'oauth_consumer_key', 'oauth_token', 
             'oauth_signature_method', 'oauth_signature', 
@@ -192,7 +192,7 @@ class OauthRequestTestCase(unittest.TestCase):
     @unittest.test
     def access_token_key_should_be_saved_to_sign_consumer_token(self):
         token = springnote.oauth.OAuthToken('key', 'secret')
-        oauth_req = springnote.Springnote.oauth_request("GET", "http://url.com/data.json", sign_token=token)
+        oauth_req = springnote.Springnote(access_token=token).oauth_request("GET", "http://url.com/data.json")
         assert_that(oauth_req.parameters['oauth_token'], token.key)
 
         
@@ -225,7 +225,7 @@ class OauthRequestTestCase(unittest.TestCase):
             .with_at_least(headers=includes_valid_oauth_param())
 
         #
-        springnote.Springnote.springnote_request("GET", "http://url.com/data.json", secure=False)
+        springnote.Springnote().springnote_request("GET", "http://url.com/data.json", secure=False)
 
         # restore 
         restore_httplib_module()
