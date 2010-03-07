@@ -48,7 +48,7 @@ class Springnote:
 
     BOUNDARY          = 'AaB03x' 
 
-    def __init__(self, consumer_token=(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET), access_token=None, verbose=None):
+    def __init__(self, access_token=None, consumer_token=(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET), verbose=None):
         """ Springnote 인스턴스를 초기화합니다.
         
          - consumer_token: 개발자가 따로 정의하고 싶은 consumer token을 (key, secret) tuple로 넣어줍니다. 넣지 않으면 라이브러리의 기본 token을 사용합니다.
