@@ -162,53 +162,6 @@ class Springnote:
         ])
 
 
-    #def fetch_request_token(self, verbose=None):
-    #    """ consumer의 자격으로 springnote.com으로부터 request token을 받아옵니다 
-    #    
-    #    >> request_token = Springnote.fetch_request_token()
-    #    """
-    #    conn = self.springnote_request(method='POST', url=self.REQUEST_TOKEN_URL, verbose=verbose)
-    #
-    #    response = conn.getresponse()
-    #    if response.status != httplib.OK:
-    #        raise SpringnoteError.Response(response)
-    #
-    #    self.request_token = oauth.OAuthToken.from_string(response.read())
-    #    return self.request_token
-
-
-    #def authorize_url(self, callback=None):
-    #    """ consumer의 자격으로 User에게 request token을 승인받을 url """
-    #    if hasattr(self, 'request_token'):
-    #        self.fetch_request_token()
-    #
-    #    params = { "oauth_token": self.request_token.key }
-    #    if callback:
-    #        params["oauth_callback"] = callback
-    #
-    #    url = "%s?%s" % (self.AUTHORIZATION_URL, urllib.urlencode(params))
-    #    return url
-
-
-    #def fetch_access_token(self):
-    #    """ consumer의 자격으로 springnote.com에 request token을 주고 access token을 받아옵니다.
-    #    access token은 request token이 있어야 하며, fetch_request_token()이 사전에 불렸어야 합니다.
-    #    
-    #    >> request_token = Springnote.fetch_request_token()
-    #    >> access_token  = Springnote.fetch_access_token()
-    #    """
-    #    if 'request_token' not in vars(self):
-    #        self.request_token = self.fetch_request_token()
-    #
-    #    conn = self.springnote_request('POST', self.ACCESS_TOKEN_URL, sign_token=self.request_token)
-    #
-    #    response = conn.getresponse()
-    #    if response.status != httplib.OK:
-    #        raise SpringnoteError.Response(response)
-    #
-    #    access_token = oauth.OAuthToken.from_string(response.read())
-    #    self.set_access_token(access_token.key, access_token.secret)
-    #    return self.access_token
     class SpringnoteAuth:
         ''' takes care of authorizing step in springnote. eventually retrieves an access token, 
         with which Springnote request data.
@@ -382,7 +335,7 @@ class SpringnoteResource:
         self.access_token = access_token # 모든 request 시에 필요한 access token
         self.parent       = parent
         self.resource     = None         # 스프링노트의 리소스를 담는 dictionary 
-        self.raw          = ''            # request의 결과로 가져온 raw data
+        self.raw          = ''           # request의 결과로 가져온 raw data
         return
 
     def request(self, path, method="GET", params={}, data=None, verbose=None):

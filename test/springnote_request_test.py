@@ -121,7 +121,6 @@ class HttpParamsTestCase(unittest.TestCase):
                 '*** This is where the content of file is. ***\r\n' \
                 '--AaB03x--\r\n'
         """
-        data = open(__file__) # open current file just for mock
         data = Mock()
         data.name = "test_file.txt"
         data_content = "** TEST FILE **"
@@ -139,6 +138,23 @@ class HttpParamsTestCase(unittest.TestCase):
         #
         self.sn.springnote_request("POST", "http://url.com/data", body=data)
         
+    @unittest.test
+    def content_type_should_not_be_json_when_posting_file(self):
+        ''' when given POST and file object as data, even if url finishes with
+        .json, header should not have {'Content-Type': 'application/json'} '''
+        data = Mock()
+        data.name = "test_file.txt"
+        data_content = "** TEST FILE **"
+        data.expects(once()).read().will(return_value(data_content))
+
+        # mock
+        self.httplib.expects(once()).method("HTTPConnection").will(return_value(self.conn))
+        self.conn.expects(once()).getresponse()
+        self.conn.expects(once()).method("request") \
+            .with_at_least(headers=not_contains_value("application/json"))
+
+        #
+        self.sn.springnote_request("POST", "http://url.com/upload.json", body=data)
 
 
 class OauthRequestTestCase(unittest.TestCase):
