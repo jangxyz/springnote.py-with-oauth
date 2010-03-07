@@ -36,6 +36,7 @@ def is_file_type(data):
           return True
      return False
 
+
 class Springnote:
     ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
     HOST              = 'api.springnote.com'
@@ -59,25 +60,26 @@ class Springnote:
         # set access token if already known
         self.access_token = None
         if access_token:
-            self.set_access_token(*access_token)
+            self.set_access_token(access_token)
 
         self.verbose = verbose
 
-    @staticmethod
-    def oauth_request(method, url, params={}, sign_token=None, verbose=False):
+    #@staticmethod
+    #def oauth_request(method, url, params={}, sign_token=None, verbose=False):
+    def oauth_request(self, method, url, params={}, verbose=False):
         ''' springnote_request에서 사용할 OAuth request를 생성합니다. 
         
         여기서 생성된 oauth request는 문자열 형태로 header에 포함됩니다.  '''
         oauth_request = oauth.OAuthRequest.from_consumer_and_token(
-            Springnote.consumer_token, sign_token, method, url, params)
+            Springnote.consumer_token, self.access_token, method, url, params)
         oauth_request.sign_request(
-            Springnote.signature_method, Springnote.consumer_token, sign_token)
+            Springnote.signature_method, Springnote.consumer_token, self.access_token)
 
         if is_verbose(verbose):
             print '>> oauth:'
             print ' * signature method :', Springnote.signature_method.get_name()
             print ' * consumer token :', (Springnote.consumer_token.key, Springnote.consumer_token.secret)
-            print ' * sign token :', sign_token #(sign_token.key, sign_token.secret)
+            print ' * sign token :', self.access_token #(sign_token.key, sign_token.secret)
 
             print '>> oauth parameters:'
             for key in sorted(oauth_request.parameters.keys()):
@@ -86,8 +88,9 @@ class Springnote:
         return oauth_request
 
 
-    @staticmethod
-    def springnote_request(method, url, params={}, headers=None, body=None, sign_token=None, secure=False, verbose=False):
+    #@staticmethod
+    #def springnote_request(method, url, params={}, headers=None, body=None, sign_token=None, secure=False, verbose=False):
+    def springnote_request(self, method, url, params={}, headers=None, body=None, sign_token=None, secure=False, verbose=False):
         """ Springnote에서 사용하는 request를 생성합니다. 
 
         oauth 인증을 위해 request token과 access token을 요청할 때와
@@ -98,9 +101,8 @@ class Springnote:
                 "GET", "http://url.com", \
                 sign_token = access_token)
         """
-        oauth_request = Springnote.oauth_request(\
-            method, url, params, \
-            sign_token=sign_token, verbose=verbose)
+        oauth_request = self.oauth_request(\
+            method, url, params, verbose=verbose)
 
         # set headers
         #if 'content-type' not in map(lambda x: x.lower(), headers.keys()):
@@ -188,7 +190,7 @@ class Springnote:
             
             >> request_token = Springnote.fetch_request_token()
             """
-            response = Springnote.springnote_request(
+            response = self.sn.springnote_request(
                 'POST', url=Springnote.REQUEST_TOKEN_URL, 
                 secure=True, verbose=verbose)
 
@@ -228,7 +230,7 @@ class Springnote:
                 return
     
             # request to springnote.com
-            response = Springnote.springnote_request(
+            response = self.sn.springnote_request(
                 'POST', Springnote.ACCESS_TOKEN_URL, 
                 sign_token=self.request_token, secure=True, verbose=verbose)
     
@@ -240,7 +242,7 @@ class Springnote:
             return access_token
     
         def set_access_token(self, token, key):
-            return sn.access_token(token, key)
+            return sn.set_access_token(token, key)
 
         def is_authorized(self):
             """ returns True if has access token
@@ -251,9 +253,17 @@ class Springnote:
             """
             return sn.access_token != None
 
-    def set_access_token(self, token, key):
+    #def set_access_token(self, token, key):
+    def set_access_token(self, args):
         """ 직접 access token을 지정합니다. """
-        self.access_token = oauth.OAuthToken(token, key)
+        if getattr(args, "__len__", False) and len(args) == 2:
+            token, key = args
+            self.access_token = oauth.OAuthToken(token, key)
+        elif getattr(args, 'key', False) and getattr(args, 'secret', False):
+            self.access_token = oauth.OAuthToken(args.key, args.secret)
+        else:
+            print "I don't know what you want me to do with", args
+            return
         return self.access_token
 
     # --- Page sugar ---
@@ -364,7 +374,7 @@ class SpringnoteResource:
             print ' * headers:',     headers
 
         # send request
-        response = Springnote.springnote_request(
+        response = Springnote(access_token=self.access_token).springnote_request(
                     method=method, url=url, params=params, 
                     headers=headers, body=data,
                     sign_token = self.access_token, 
