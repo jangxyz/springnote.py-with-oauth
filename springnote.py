@@ -105,7 +105,7 @@ class Springnote:
         #if 'content-type' not in map(lambda x: x.lower(), headers.keys()):
         #    headers['Content-Type'] = 'application/json'
         if headers is None:
-            if method=="POST" and is_file_type(body):
+            if method != "GET" and is_file_type(body):
                 headers = {'Content-Type': "multipart/form-data; boundary=%s" % Springnote.BOUNDARY}
             elif '.json' in url: 
                 headers = {'Content-Type': 'application/json'}

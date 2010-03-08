@@ -133,8 +133,17 @@ class IntegrationTestCase(unittest.TestCase):
         url  = 'http://api.springnote.com/pages/%d/attachments.json' % page_id
         data = open(__file__, 'rb') # i shall sacrifice myself for testing!
         resp = sn.springnote_request("POST", url, body=data, sign_token=access_token, verbose=global_verbose)
+        data.close()
         check(resp, "error on POST attachment")
         attachment_id = parse_data(resp.read(), "identifier")
+
+        # PUT attachment
+        #  put attachment to the page
+        print "test PUT attachment",
+        url  = 'http://api.springnote.com/pages/%d/attachments/%d.json' % (page_id, attachment_id)
+        data = open(__file__, 'rb') 
+        resp = sn.springnote_request("PUT", url, body=data, sign_token=access_token, verbose=global_verbose)
+        check(resp, "error on PUT attachment")
 
         # GET attachment
         #   get information about attachment
