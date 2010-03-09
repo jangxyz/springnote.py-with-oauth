@@ -6,14 +6,14 @@
     Springnote API library using OAuth
 
 """
-VERSION = 0.1
+__author__  = "Jang-hwan Kim"
+__email__   = "janghwan at gmail dot com"
+__version__ = 0.2
 
 import env 
 
-import oauth, sys, types
-import simplejson as json
-import httplib, urllib
-import socket
+import oauth, sys
+import httplib, urllib, socket
 
 # default consumer token (as springnote python library)
 CONSUMER_TOKEN_KEY    = '162DSyqm28o355V7zEKw'
@@ -21,6 +21,39 @@ CONSUMER_TOKEN_SECRET = 'MtiDOAWsFkH2yOLzOYkubwFK6THOA5iAJIR4MJnwKMQ'
 
 default_verbose = False
 default_dry_run = False
+
+
+class SpringnoteError:
+    class Base(Exception):
+        def __init__(self, error):
+            self.error = error
+        def __str__(self):
+            error_tuple = lambda x: (x["error"]["error_type"], x["error"]["description"])
+            error_tuple_str = lambda x: "%s: %s" % error_tuple(x)
+            if isinstance(self.error, dict):
+                return error_tuple_str(self.error)
+            elif isinstance(self.error, list):
+                error_msgs = [error_tuple_str(error) for error in self.error]
+                return '\n'.join(error_msgs)
+            else:
+                return self.error
+    class ParseError(Base): pass
+    class Unauthorized(Base): pass
+    class NotFound(Base):     pass
+    class Network(Base):      pass
+
+    class Response(Base):
+        # status codes and names, extracted from httplib
+        status_map = {100: 'CONTINUE', 101: 'SWITCHING_PROTOCOLS', 102: 'PROCESSING', 200: 'OK', 201: 'CREATED', 202: 'ACCEPTED', 203: 'NON_AUTHORITATIVE_INFORMATION', 204: 'NO_CONTENT', 205: 'RESET_CONTENT', 206: 'PARTIAL_CONTENT', 207: 'MULTI_STATUS', 226: 'IM_USED', 300: 'MULTIPLE_CHOICES', 301: 'MOVED_PERMANENTLY', 302: 'FOUND', 303: 'SEE_OTHER', 304: 'NOT_MODIFIED', 305: 'USE_PROXY', 307: 'TEMPORARY_REDIRECT', 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 402: 'PAYMENT_REQUIRED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 406: 'NOT_ACCEPTABLE', 407: 'PROXY_AUTHENTICATION_REQUIRED', 408: 'REQUEST_TIMEOUT', 409: 'CONFLICT', 410: 'GONE', 411: 'LENGTH_REQUIRED', 412: 'PRECONDITION_FAILED', 413: 'REQUEST_ENTITY_TOO_LARGE', 414: 'REQUEST_URI_TOO_LONG', 415: 'UNSUPPORTED_MEDIA_TYPE', 416: 'REQUESTED_RANGE_NOT_SATISFIABLE', 417: 'EXPECTATION_FAILED', 422: 'UNPROCESSABLE_ENTITY', 423: 'LOCKED', 424: 'FAILED_DEPENDENCY', 426: 'UPGRADE_REQUIRED', 443: 'HTTPS_PORT', 500: 'INTERNAL_SERVER_ERROR', 501: 'NOT_IMPLEMENTED', 502: 'BAD_GATEWAY', 503: 'SERVICE_UNAVAILABLE', 504: 'GATEWAY_TIMEOUT', 505: 'HTTP_VERSION_NOT_SUPPORTED', 507: 'INSUFFICIENT_STORAGE', 510: 'NOT_EXTENDED'}
+
+        def __init__(self, response):
+            body = response.read()
+            errors = body
+
+            status_name = self.status_map[response.status].replace('_', ' ')
+            self.status = response.status
+            self.error  = "%d %s: %s" % (response.status, status_name, errors)
+
 
 def is_verbose(is_verbose):
     if (is_verbose is None and default_verbose is True) or is_verbose is True:
@@ -262,263 +295,4 @@ class Springnote:
             print "I don't know what you want me to do with", args
             return
         return self.access_token
-
-    # --- Page sugar ---
-    def get_page(self, id, note=None, params={}, verbose=None):
-        """ /pages/:page_id.json에 접근하여 page를 가져옵니다. """
-        return Page(self.access_token).get(id, note, params, verbose=verbose)
-
-    def get_pages(self, note=None, params={}, verbose=None):
-        """ 전체 page의 리스트를 가져옵니다.  """
-        return Page(self.access_token).list(note, params, verbose=verbose)
-
-    def create_page(self, title=None, source=None, tags=None, relation_is_part_of=None, note=None, params={}, verbose=None):
-        """ /pages.json에 접근하여 새 page를 생성합니다. """
-        return Page(self.access_token, note=note,
-            title=title, source=source, tags=tags, 
-            relation_is_part_of=relation_is_part_of,
-        ).create(params, verbose=verbose)
-
-
-    def update_page(self, id, title=None, source=None, tags=None,  relation_is_part_of=None, note=None, params={}, verbose=None):
-        """ /pages/:page_id.json에 접근하여 기존 페이지를 수정합니다. """
-        if note:  params['domain'] = note
-        path = "/pages/%d.json" % id
-        date = {}
-        if title:  data['title' ] = title
-        if source: data['source'] = source
-
-        new_page = Page(self.access_token)
-        new_page = new_page.request(path, "PUT", params, data, verbose=verbose)
-        return new_page
-
-    # --- Comments sugar ---
-    def get_comments(self, id, note=None, params={}, verbose=None):
-        raise NotImplementedError('you should implement it!')
-
-
-class SpringnoteError:
-    class Base(Exception):
-        def __init__(self, error):
-            self.error = error
-        def __str__(self):
-            error_tuple = lambda x: (x["error"]["error_type"], x["error"]["description"])
-            error_tuple_str = lambda x: "%s: %s" % error_tuple(x)
-            if isinstance(self.error, dict):
-                return error_tuple_str(self.error)
-            elif isinstance(self.error, list):
-                error_msgs = [error_tuple_str(error) for error in self.error]
-                return '\n'.join(error_msgs)
-            else:
-                return self.error
-    class ParseError(Base): pass
-    class Unauthorized(Base): pass
-    class NotFound(Base):     pass
-    class Network(Base):      pass
-
-    class Response(Base):
-        # status codes and names, extracted from httplib
-        status_map = {100: 'CONTINUE', 101: 'SWITCHING_PROTOCOLS', 102: 'PROCESSING', 200: 'OK', 201: 'CREATED', 202: 'ACCEPTED', 203: 'NON_AUTHORITATIVE_INFORMATION', 204: 'NO_CONTENT', 205: 'RESET_CONTENT', 206: 'PARTIAL_CONTENT', 207: 'MULTI_STATUS', 226: 'IM_USED', 300: 'MULTIPLE_CHOICES', 301: 'MOVED_PERMANENTLY', 302: 'FOUND', 303: 'SEE_OTHER', 304: 'NOT_MODIFIED', 305: 'USE_PROXY', 307: 'TEMPORARY_REDIRECT', 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 402: 'PAYMENT_REQUIRED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 406: 'NOT_ACCEPTABLE', 407: 'PROXY_AUTHENTICATION_REQUIRED', 408: 'REQUEST_TIMEOUT', 409: 'CONFLICT', 410: 'GONE', 411: 'LENGTH_REQUIRED', 412: 'PRECONDITION_FAILED', 413: 'REQUEST_ENTITY_TOO_LARGE', 414: 'REQUEST_URI_TOO_LONG', 415: 'UNSUPPORTED_MEDIA_TYPE', 416: 'REQUESTED_RANGE_NOT_SATISFIABLE', 417: 'EXPECTATION_FAILED', 422: 'UNPROCESSABLE_ENTITY', 423: 'LOCKED', 424: 'FAILED_DEPENDENCY', 426: 'UPGRADE_REQUIRED', 443: 'HTTPS_PORT', 500: 'INTERNAL_SERVER_ERROR', 501: 'NOT_IMPLEMENTED', 502: 'BAD_GATEWAY', 503: 'SERVICE_UNAVAILABLE', 504: 'GATEWAY_TIMEOUT', 505: 'HTTP_VERSION_NOT_SUPPORTED', 507: 'INSUFFICIENT_STORAGE', 510: 'NOT_EXTENDED'}
-
-        def __init__(self, response):
-            body = response.read()
-            try:
-                errors = json.loads(body)
-            except ValueError:
-                errors = body
-
-            status_name = self.status_map[response.status].replace('_', ' ')
-            self.status = response.status
-            self.error  = "%d %s: %s" % (response.status, status_name, errors)
-
-
-
-class SpringnoteResource:
-    """ springnote에서 사용하는 리소스의 부모 클래스. 
-        Page, Attachment 등이 이 클래스를 상속합니다 """
-    attributes = [] # 각 리소스가 사용하는 attribute
-
-    def __init__(self, access_token, parent=None):
-        self.access_token = access_token # 모든 request 시에 필요한 access token
-        self.parent       = parent
-        self.resource     = None         # 스프링노트의 리소스를 담는 dictionary 
-        self.raw          = ''           # request의 결과로 가져온 raw data
-        return
-
-    def request(self, path, method="GET", params={}, data=None, verbose=None):
-        """ springnote에 request를 보내고, 받은 결과를 토대로 리소스를 생성합니다.
-            SpringnoteResource를 상속 받는 모든 하위클래스에서 사용합니다. """
-
-        url     = "http://%s/%s" % (Springnote.HOST, path.lstrip('/'))
-        headers = {'Content-Type': 'application/json'}
-        if data: # set body if given (ex. {'page': ...})
-            data = {self.__class__.__name__.lower(): data}
-            data = json.dumps(data, ensure_ascii=False)
-            if type(data) == str: 
-                data = data.decode('utf-8')
-            data = data.encode('utf-8')
-        use_https = False
-
-        if is_verbose(verbose):
-            print '>> content'
-            if use_https:
-                print ' * uses HTTPS connection'
-            print ' * HTTP method:', method
-            print ' * params:',      params
-            print ' * path:',        path
-            print ' * url:',         url
-            print ' * data:',        data
-            print ' * headers:',     headers
-
-        # send request
-        response = Springnote(access_token=self.access_token).springnote_request(
-                    method=method, url=url, params=params, 
-                    headers=headers, body=data,
-                    sign_token = self.access_token, 
-                    secure     = use_https, 
-                    verbose    = verbose
-        )
-        if not default_dry_run:
-            if response.status != httplib.OK:
-                raise SpringnoteError.Response(response)
-
-            return self.__build_model_from_response(response.read(), verbose=verbose)
-
-
-    def __build_model_from_response(self, data, verbose=None): 
-        """ springnote의 response에 따라 모델을 만듭니다. 
-
-          * self.raw: response 본문이 저장됩니다.
-          * self.resource: response의 내용이 dictionary 형태로 저장됩니다.
-        """
-        self.raw = data
-        if is_verbose(verbose):
-            print '<< data:'
-            print data
-            print
-        # build proper object
-        object_name = self.__class__.__name__.lower() # Page => 'page'
-        structure = json.loads(data)
-        # build multiple data
-        if type(structure) is list:
-            multiple_resources = []
-            for resource_dict in structure:
-                new_instance = self.__class__(self.access_token, parent=self.parent)
-                new_instance.resource = resource_dict[object_name]
-                new_instance.process_resource(new_instance.resource)
-                multiple_resources.append( new_instance )
-            return multiple_resources
-        # build single data        
-        elif object_name in data:
-            self.resource = json.loads(data)[object_name]
-            # process resource specific tasks
-            self.process_resource(self.resource)
-            return self
-        else:
-            raise ParseError('unable to parse as predefined model: ' + data)
-
-
-    def process_resource(self, resource_dict):
-        """ resource마다 따로 필요한 후처리 작업을 해줍니다. 
-
-        각 resource마다 이 메소드를 재정의해서 필요한 후처리를 할 수 있습니다. 
-        기본적으로 .id attribute를 추가합니다.
-        """
-        # set direct accessor (ex: page.identifier == 2)
-        [setattr(self, key, value) for key, value in resource_dict.iteritems()]
-        # unicode
-        for key, value in resource_dict.iteritems():
-            if isinstance(value, str):
-                setattr(self, key, eval('u"""%s"""' % value))
-        # alias id
-        if "identifier" in resource_dict:
-            setattr(self, "id", resource_dict["identifier"])
-        self.resource = resource_dict
-        return resource_dict
-
-
-class Page(SpringnoteResource):
-    """ 스프링노트의 page에 대한 정보를 가져오거나, 수정할 수 있습니다.
-        page의 하위 리소스에 접근할 수 있도록 해줍니다. """
-
-    attributes = [
-        "identifier",           # 페이지 고유 ID  예) 2
-        "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
-        "date_modified",        # 페이지 최종 수정 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
-        "rights",               # 페이지에 설정된 Creative Commons License  예) by-nc
-        "creator",              # 페이지 소유자 OpenID
-        "contributor_modified", # 최종 수정자 OpenID
-        "title",                # 페이지 이름  예) TestPage
-        "source",               # 페이지 원본.  예) &lt;p&gt; hello &lt;/p&gt; 
-        "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
-        "tags"                  # 페이지에 붙은 태그  예) tag1,tag2
-    ]
-    writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
-
-    def __init__(self, access_token, title=None, source=None, relation_is_part_of=None, tags=None, parent=None):
-        """ can give writable_attribute arguments, so you can save easily later """
-        SpringnoteResource.__init__(self, access_token, parent=parent)
-        self.title  = title
-        self.source = source
-        self.relation_is_part_of = relation_is_part_of
-        self.tags   = tags
-        
-
-    def process_resource(self, resource_dict):
-        """ +tags를 배열로 변환한다. """
-        SpringnoteResource.process_resource(self, resource_dict)
-        if "tags" in resource_dict:
-            self.tags = filter(None, self.tags.split(','))
-        return resource_dict
-
-    def __writable_resources(self):
-        writable_resource = {}
-        for key, value in self.resource.iteritems():
-            if key in self.writable_attributes:
-                writable_resource[key] = getattr(self, key)
-        # convert list of tags into string
-        if 'tags' in self.resource:
-            writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
-        return writable_resource
-
-    #--
-
-    def get(self, id, note=None, params={}, verbose=None):
-        if note:
-            params['domain'] = note
-        path = "/pages/%d.json" % id
-        if params: 
-            path += "?%s" % urllib.urlencode(params)
-        return self.request(path, "GET", params=params, verbose=verbose)
-
-    def list(self, note=None, params={}, verbose=None):
-        if note:
-            params['domain'] = note
-        path = "/pages.json"
-        if params: 
-            path += "?%s" % urllib.urlencode(params)
-        return self.request(path, "GET", params, verbose=verbose)
-
-    def create(self, title=None, source=None, tags=None, relation_is_part_of=None, note=None, params={}, verbose=None):
-        self.parent = note or self.parent
-        self.title  = title or self.title 
-        self.source = source or self.source 
-        self.tags   = tags or self.tags 
-        self.relation_is_part_of  = relation_is_part_of or self.relation_is_part_of 
-
-        if self.parent: params['domain'] = self.parent
-        path = "/pages.json"
-        data = {}
-        if self.title:  data['title' ] = self.title
-        if self.source: data['source'] = self.source
-
-        return self.request(path, "POST", params, data, verbose=verbose)
-
-    #def save(self):
-    #    """ /pages/:page_id.json에 접근하여 page를 수정합니다. """
-    #    path = "/pages/%d.json" % self.id
-    #    method = "PUT"
-    #
-    #    self.request(path, method, data=self.__writable_resources())
-    #    return self
 

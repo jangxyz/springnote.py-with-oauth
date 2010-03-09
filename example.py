@@ -138,28 +138,17 @@ def main():
         sn.set_access_token(*access_token)
 
     ## Request resource
-    if method == 'GET':
-        if resource is None:
-            if page_id: # GET page 123
-                page = sn.get_page(page_id, verbose=verbose)
-                pprint.pprint(page.resource)
-                print "got page '%s'(#%d), last updated at %s" % (page.title, page.identifier, page.date_modified)
-            else:       # GET pages
-                pages = sn.get_pages(verbose=verbose)
-                first_p = filter(lambda x: x.relation_is_part_of is None, pages)[0]
-                last_p  = max(pages, key=lambda x: x.date_modified)
-                print "got", len(pages), 'pages,',
-                print "from '%s'(#%d) to '%s'(#%d)" % (first_p.title, first_p.identifier, last_p.title, last_p.identifier)
-                print "what did you expect? :p"
-            return
-
-    # other resources
-    if resource_id:  path = '/%s/%d.json' % (resource, resource_id)
-    else:            path = '/%s.json'    % resource
-    # downloading attachment omits extension .json 
-    if resource == 'attachments' and resource_id:
-        path = path[:-5]
-    url = 'http://api.springnote.com/pages/%d%s' % (page_id, path)
+    if resource is None:    # page resource
+        if page_id: path = "/%s.json" % page_id     # GET page 123
+        else:       path = ".json"                  # GET pages
+        url = "http://api.springnote.com/pages" + path
+    else:                   # other resources
+        if resource_id:  path = '/%s/%d.json' % (resource, resource_id)
+        else:            path = '/%s.json'    % resource
+        # downloading attachment omits extension .json 
+        if resource == 'attachments' and resource_id:
+            path = path[:-5]
+        url = 'http://api.springnote.com/pages/%d%s' % (page_id, path)
     print method, url
 
     http_response = sn.springnote_request(method, url, verbose=verbose)
