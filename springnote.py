@@ -8,7 +8,7 @@
 """
 __author__  = "Jang-hwan Kim"
 __email__   = "janghwan at gmail dot com"
-__version__ = 0.2
+__version__ = 1.0
 
 import env 
 
@@ -91,7 +91,7 @@ class Springnote:
          - consumer_token: 개발자가 따로 정의하고 싶은 consumer token을 (key, secret) tuple로 넣어줍니다. 넣지 않으면 라이브러리의 기본 token을 사용합니다.
          - access_token: 이전에 사용자가 승인하여 얻은 access token이 있으면 그것을 바로 넣어줄 수 있습니다. 만료가 되지 않았다면 바로 사용할 수 있습니다.
         """
-        Springnote.consumer_token = oauth.OAuthConsumer(*(consumer_token))
+        Springnote.consumer_token = oauth.OAuthConsumer(*consumer_token)
         self.auth = self.SpringnoteAuth(self)
 
         # set access token if already known
@@ -105,7 +105,7 @@ class Springnote:
         ''' springnote_request에서 사용할 OAuth request를 생성합니다. 
         
         여기서 생성된 oauth request는 문자열 형태로 header에 포함됩니다.  '''
-        sign_token = sign_token or self.access_token
+        sign_token = self.format_token(sign_token or self.access_token)
         oauth_request = oauth.OAuthRequest.from_consumer_and_token(
             Springnote.consumer_token, sign_token, method, url, params)
         oauth_request.sign_request(
@@ -131,9 +131,8 @@ class Springnote:
         일반적인 springnote resource 요청할 때 사용합니다.
 
         >>> access_token = oauth.OAuthToken('key', 'secret')
-        >>> http_response = Springnote.springnote_request( \
-                "GET", "http://url.com", \
-                sign_token = access_token)
+        >>> http_response = Springnote(access_token).springnote_request( \
+                "GET", "http://url.com/path")
         """
         oauth_request = self.oauth_request(method, url, params, \
             sign_token=(sign_token or self.access_token), verbose=verbose)
@@ -287,17 +286,31 @@ class Springnote:
             """
             return sn.access_token != None
 
-    def set_access_token(self, *args):
-        """ 직접 access token을 지정합니다. """
+    @staticmethod
+    def format_token(*args):
+        """ 사용자가 OAuth.token이든 tuple이든 보내면 포맷을 잡아줍니다 """
+        # (('KEY', 'SECRET'))
+        if len(args) == 1 and getattr(args[0], '__len__', False):
+            args = args[0]
+
+        # ('KEY', 'SECRET')
         if len(args) == 2:
             token, key = args
-            self.access_token = oauth.OAuthToken(token, key)
-        elif len(args) == 1 and \
+            return oauth.OAuthToken(token, key)
+
+        # any object that responds to 'key' and 'secret'
+        if len(args) == 1 and \
             getattr(args[0], 'key', False) and getattr(args[0], 'secret', False):
-                self.access_token = oauth.OAuthToken(args[0].key, args[0].secret)
-        else:
+                return oauth.OAuthToken(args[0].key, args[0].secret)
+
+        if args != (None):
             print "I don't know what you want me to do with", args
-            return
+        return
+
+
+    def set_access_token(self, *args):
+        """ 직접 access token을 지정합니다. """
+        self.access_token = self.format_token(*args)
         return self.access_token
 
     # --- Page sugar ---
@@ -374,7 +387,7 @@ class SpringnoteResource:
             print ' * headers:',     headers
 
         # send request
-        response = Springnote(access_token=self.access_token).springnote_request(
+        response = Springnote(self.access_token).springnote_request(
                     method=method, url=url, params=params, 
                     headers=headers, body=data,
                     sign_token = self.access_token, 
@@ -385,10 +398,10 @@ class SpringnoteResource:
             if response.status != httplib.OK:
                 raise SpringnoteError.Response(response)
 
-            return self.__build_model_from_response(response.read(), verbose=verbose)
+            return self._build_model_from_response(response.read(), verbose=verbose)
 
 
-    def __build_model_from_response(self, data, verbose=None): 
+    def _build_model_from_response(self, data, verbose=None): 
         """ springnote의 response에 따라 모델을 만듭니다. 
 
           * self.raw: response 본문이 저장됩니다.
@@ -458,14 +471,16 @@ class Page(SpringnoteResource):
     ]
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
 
-    def __init__(self, access_token, title=None, source=None, relation_is_part_of=None, tags=None, parent=None):
+    def __init__(self, access_token, note=None, id=None, 
+            title=None, source=None, relation_is_part_of=None, tags=None):
         """ can give writable_attribute arguments, so you can save easily later """
-        SpringnoteResource.__init__(self, access_token, parent=parent)
+        SpringnoteResource.__init__(self, access_token)
+        self.note   = note
+        self.id     = id
         self.title  = title
         self.source = source
         self.relation_is_part_of = relation_is_part_of
         self.tags   = tags
-        
 
     def process_resource(self, resource_dict):
         """ +tags를 배열로 변환한다. """
@@ -476,20 +491,22 @@ class Page(SpringnoteResource):
 
     def __writable_resources(self):
         writable_resource = {}
-        for key, value in self.resource.iteritems():
-            if key in self.writable_attributes:
-                writable_resource[key] = getattr(self, key)
-        # convert list of tags into string
-        if 'tags' in self.resource:
-            writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
+        if self.resource:
+            for key, value in self.resource.iteritems():
+                if key in self.writable_attributes:
+                    writable_resource[key] = getattr(self, key)
+            # convert list of tags into string
+            if 'tags' in self.resource:
+                writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
         return writable_resource
 
     #--
 
-    def get(self, id, note=None, params={}, verbose=None):
-        if note:
-            params['domain'] = note
-        path = "/pages/%d.json" % id
+    def get(self, verbose=None):
+        params = {}
+        if self.note:
+            params['domain'] = self.note
+        path = "/pages/%d.json" % self.id
         if params: 
             path += "?%s" % urllib.urlencode(params)
         return self.request(path, "GET", params=params, verbose=verbose)
@@ -502,26 +519,40 @@ class Page(SpringnoteResource):
             path += "?%s" % urllib.urlencode(params)
         return self.request(path, "GET", params, verbose=verbose)
 
-    def create(self, title=None, source=None, tags=None, relation_is_part_of=None, note=None, params={}, verbose=None):
-        self.parent = note or self.parent
-        self.title  = title or self.title 
-        self.source = source or self.source 
-        self.tags   = tags or self.tags 
-        self.relation_is_part_of  = relation_is_part_of or self.relation_is_part_of 
+    #def create(self, title=None, source=None, tags=None, relation_is_part_of=None, note=None, params={}, verbose=None):
+    #    self.parent = note or self.parent
+    #    self.title  = title or self.title 
+    #    self.source = source or self.source 
+    #    self.tags   = tags or self.tags 
+    #    self.relation_is_part_of  = relation_is_part_of or self.relation_is_part_of 
+    #    if self.parent: params['domain'] = self.parent
+    #    path = "/pages.json"
+    #    data = {}
+    #    if self.title:  data['title' ] = self.title
+    #    if self.source: data['source'] = self.source
+    #    return self.request(path, "POST", params, data, verbose=verbose)
 
-        if self.parent: params['domain'] = self.parent
-        path = "/pages.json"
+    def save(self, verbose=None):
+        """ /pages/:page_id.json에 접근하여 page를 수정합니다. """
+        if self.id:
+            path = "/pages/%d.json" % self.id
+            method = "PUT"
+        else:
+            path = "/pages.json"
+            method = "POST"
+
+        params = {}
+        if self.note:
+            params['domain'] = self.note
+        if params:
+            path += "?%s" % urllib.urlencode(params)
+
         data = {}
-        if self.title:  data['title' ] = self.title
-        if self.source: data['source'] = self.source
-
-        return self.request(path, "POST", params, data, verbose=verbose)
-
-    #def save(self):
-    #    """ /pages/:page_id.json에 접근하여 page를 수정합니다. """
-    #    path = "/pages/%d.json" % self.id
-    #    method = "PUT"
-    #
-    #    self.request(path, method, data=self.__writable_resources())
-    #    return self
+        for attr in self.writable_attributes:
+            value = getattr(self, attr, False)
+            if value:
+                data[attr] = value
+    
+        self.request(path, method, params=params, data=data, verbose=verbose)
+        return self
 
