@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-Test basic crud calls for page 
+    Test basic crud calls for Page Resource
 '''
 import test_env
 
@@ -15,7 +15,6 @@ import springnote
 
 def set_url(id, note=None, params={}):
     return "http://api.springnote.com/pages/%d.json" % id
-
 
 # callabla Mock
 class CMock(Mock):
@@ -39,11 +38,39 @@ def mock_springnote_class():
 
     return springnote.Springnote, springnote.SpringnoteResource
 
-
 def restore_springnote_class():
     springnote.Springnote = original_sn
     springnote.SpringnoteResource = original_sn_rsrc
     #springnote = original_module
+
+def should_call_method(object, method_name, callable):
+    class IsCalled(Exception): pass
+    def is_called(*args, **kwarg): raise IsCalled()
+    # save
+    orig = getattr(object, method_name)
+    # patch
+    setattr(object, method_name, is_called)
+
+    # run
+    try:
+        callable()
+        raise AssertionError, "method %s is not called" % method_name
+    except IsCalled:
+        # verify
+        pass 
+    finally:
+        # restore
+        setattr(object, method_name, orig)
+
+def should_raise(exception, callable):
+    try:
+        callable()
+        self.fail("did not raise exception %s" % exception)
+    except exception:
+        pass # proper exception raised
+    except Exception, e:
+        error_msg = 'expected %s to be raised but instead got %s:"%s"' % (exception, type(e), e)
+        raise AssertionError, error_msg
 
 class CrudPageTestCase(unittest.TestCase):
     def setUp(self):
@@ -61,6 +88,8 @@ class CrudPageTestCase(unittest.TestCase):
         self.m_get_response.expects(once()).read()
         self.m_get_response.status = 200
 
+        self.token = ('FAKE_KEY', 'FAKE_SECRET')
+
     def tearDown(self):
         restore_springnote_class()
 
@@ -74,41 +103,40 @@ class CrudPageTestCase(unittest.TestCase):
         self.springnote.get_page(id)
 
     @unittest.test
-    def get_method_calls_get_page_request(self):
-        """ Page(access_token, id=123).get() 
-        calls springnote_request(method="GET", url=".*/123[.].*", ...) """
+    def get_method_with_id_calls_get_page_request(self):
+        """ page.get() with id calls get page request
+
+        Page(self.token, id=123).get()
+        calls springnote_request(method="GET", url=".*/pages/123[.].*", ...) """
         id = 123
 
         # mock
-        url_pattern = "/%d." % id
-        self.expects_springnote_request \
-            .with_at_least(method=eq("GET"), url=string_contains(url_pattern))
-        #springnote.SpringnoteResource.expects(once()).__build_model_from_response() \
-        #    .will(return_value(None))
-
-        # run
-        access_token = ('FAKE_TOKEN', 'FAKE_KEY')
-        springnote.Page(access_token, id=id).get()
+        url_pattern = "/pages/%d." % id
+        self.expects_springnote_request .with_at_least(
+            method = eq("GET"), 
+            url    = string_contains(url_pattern)
+        )
+        springnote.Page(self.token, id=id).get()
 
     @unittest.test
-    def get_method_with_note_calls_with_domain_param(self):
-        """ Page(access_token, note='jangxyz', id=123).get() 
-        calls springnote_request(method="GET", url=".*/123[.].*?domain=jangxyz", ...) """
-        note = 'jangxyz'
-        id   = 123
+    def get_method_without_id_is_invalid(self):
+        """ page.get() without id is invalid 
+        Page(self.token).get() raises InvalidOption error """
+        should_raise(springnote.SpringnoteError.InvalidOption, \
+            lambda: springnote.Page(self.token).get())
 
-        # mock
-        url_pattern = re.compile("/%d[.].*domain=%s" % (id,note))
-        self.expects_springnote_request \
-            .with_at_least(method=eq("GET"), url=string_contains(url_pattern))
-
-        # run
-        access_token = ('FAKE_TOKEN', 'FAKE_KEY')
-        springnote.Page(access_token, id=id, note=note).get()
+    @unittest.test
+    def get_method_calls_set_path_params(self):
+        ''' page.get() calls _set_path_params() '''
+        note, id = 'jangxyz', 123
+        should_call_method(springnote.Page, '_set_path_params', 
+            lambda: springnote.Page(self.token, note=note, id=id).get()
+        )
 
     @unittest.test
     def save_method_without_id_calls_create_page_request(self):
-        """ Page(access_token, title='title', source='source').save()
+        """ page.save() without id calls create page request
+        Page(self.token, title='title', source='source').save()
         calls springnote_request(method="POST", body={title:..,source:..}, ..) """
 
         title  = 'some title'
@@ -126,15 +154,14 @@ class CrudPageTestCase(unittest.TestCase):
             .with_at_least(method=eq("POST"), body=string_contains(body_pattern))
 
         # run
-        access_token = ('FAKE_TOKEN', 'FAKE_KEY')
-        springnote.Page(access_token, title=title, source=source).save()
+        springnote.Page(self.token, title=title, source=source).save()
 
 
     @unittest.test
     def save_method_with_id_calls_update_page_request(self):
-        """ Page(access_token, id=123, source='edited').save()
+        """ page.save() with id calls update page request
+        Page(self.token, id=123, source='edited').save()
         calls springnote_request(method="PUT", url="../123.", body={source:..}, ..) """
-
         id     = 123
         source = 'edited'
 
@@ -150,30 +177,84 @@ class CrudPageTestCase(unittest.TestCase):
         )
 
         # run
-        access_token = ('FAKE_TOKEN', 'FAKE_KEY')
-        springnote.Page(access_token, id=id, source=source).save()
+        springnote.Page(self.token, id=id, source=source).save()
+
 
     @unittest.test
-    def save_method_with_id_and_note_sets_proper_path_and_params(self):
-        """ Page(access_token, id=123, source='edited').save()
-        calls springnote_request(method="PUT", url="../123.", ..) """
+    def save_method_calls_set_path_params(self):
+        ''' page.save() calls _set_path_params() '''
+        note, id = 'jangxyz', 123
+        should_call_method(springnote.Page, '_set_path_params', 
+            lambda: springnote.Page(self.token, note=note, id=id).save()
+        )
 
-        id   = 123
-        note = 'some_note'
 
-        # method: "PUT"
-        # params: {'domain': 'some_note'}
-        # url:    "/pages/123.json?domain=some_note"
-        url_pattern  = re.compile('''/pages/%d[.].*?.*domain=%s''' % (id,note))
+    @unittest.test
+    def delete_method_with_id_calls_delete_page_request(self):
+        """ page.delete() with id calls delete page request
+        Page(self.token, id=123).delete() 
+        calls springnote_request(method="DELETE", url="../123.", ..) """
+        id = 123
+
+        # method: "DELETE"
+        # url:    "/pages/123."
+        url_pattern  = re.compile('''/pages/%d[.]''' % id) 
         self.expects_springnote_request .with_at_least(
-            method = eq("PUT"), 
+            method = eq("DELETE"), 
             url    = string_contains(url_pattern),
-            params = dict_including({'domain': note}),
         )
 
         # run
-        access_token = ('FAKE_TOKEN', 'FAKE_KEY')
-        springnote.Page(access_token, note=note, id=id).save()
+        springnote.Page(self.token, id=id).delete()
+
+    @unittest.test
+    def delete_method_calls__set_path_params(self):
+        ''' page.delete() calls _set_path_params() '''
+        note, id = 'jangxyz', 123
+        should_call_method(springnote.Page, '_set_path_params', 
+            lambda: springnote.Page(self.token, note=note, id=id).delete()
+        )
+
+
+    @unittest.test
+    def delete_method_without_id_is_invalid(self):
+        """ page.delete() without id is invalid
+        
+        Page(self.token).delete() raises InvalidOption error """
+        try:
+            springnote.Page(self.token).delete()
+            self.fail("did not raise exception")
+        except springnote.SpringnoteError.InvalidOption:
+            pass # proper exception raised
+
+
+    @unittest.test
+    def format_path_and_parameters(self):
+        ''' _set_path_params() formats path and params according to note and page id 
+
+        id   sets "/$id$"  in path, while 
+        note sets 'domain' key in params and 'domain=$domain' in query
+            id=None: path '/pages.json'
+            id=1234: path '/pages/1234.json'
+            note='ab', id=None: ('/pages.json?domain=ab',      {'domain':'ab'})
+            note='ab', id=1234: ('/pages/1234.json?domain=ab', {'domain':'ab'}) 
+        '''
+
+        Page = springnote.Page
+        t = self.token
+
+        # no note
+        assert_that(Page(t, note=None, id=None)._set_path_params(),
+                        is_(('/pages.json',      {})))
+        assert_that(Page(t, note=None, id=1234)._set_path_params(),
+                        is_(('/pages/1234.json', {})))
+
+        # with note
+        assert_that(Page(t, note='ab', id=None)._set_path_params(),
+                        is_(('/pages.json?domain=ab',      {'domain':'ab'})))
+        assert_that(Page(t, note='ab', id=1234)._set_path_params(),
+                        is_(('/pages/1234.json?domain=ab', {'domain':'ab'})))
+
 
 
 if __name__ == '__main__':

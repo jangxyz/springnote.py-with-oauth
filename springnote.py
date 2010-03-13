@@ -38,7 +38,8 @@ class SpringnoteError:
                 return '\n'.join(error_msgs)
             else:
                 return self.error
-    class ParseError(Base): pass
+    class InvalidOption(Base): pass
+    class ParseError(Base):   pass
     class Unauthorized(Base): pass
     class NotFound(Base):     pass
     class Network(Base):      pass
@@ -490,25 +491,24 @@ class Page(SpringnoteResource):
         return resource_dict
 
     def __writable_resources(self):
+        if self.resource is None:
+            self.update_resource()
+
         writable_resource = {}
-        if self.resource:
-            for key, value in self.resource.iteritems():
-                if key in self.writable_attributes:
-                    writable_resource[key] = getattr(self, key)
-            # convert list of tags into string
-            if 'tags' in self.resource:
-                writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
+        for key, value in self.resource.iteritems():
+            if key in self.writable_attributes:
+                writable_resource[key] = getattr(self, key)
+        # convert list of tags into string
+        if 'tags' in self.resource:
+            writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
         return writable_resource
 
     #--
 
     def get(self, verbose=None):
-        params = {}
-        if self.note:
-            params['domain'] = self.note
-        path = "/pages/%d.json" % self.id
-        if params: 
-            path += "?%s" % urllib.urlencode(params)
+        if self.id is None:
+            raise SpringnoteError.InvalidOption("need page id to perform get()")
+        path, params = self._set_path_params()
         return self.request(path, "GET", params=params, verbose=verbose)
 
     def list(self, note=None, params={}, verbose=None):
@@ -519,33 +519,11 @@ class Page(SpringnoteResource):
             path += "?%s" % urllib.urlencode(params)
         return self.request(path, "GET", params, verbose=verbose)
 
-    #def create(self, title=None, source=None, tags=None, relation_is_part_of=None, note=None, params={}, verbose=None):
-    #    self.parent = note or self.parent
-    #    self.title  = title or self.title 
-    #    self.source = source or self.source 
-    #    self.tags   = tags or self.tags 
-    #    self.relation_is_part_of  = relation_is_part_of or self.relation_is_part_of 
-    #    if self.parent: params['domain'] = self.parent
-    #    path = "/pages.json"
-    #    data = {}
-    #    if self.title:  data['title' ] = self.title
-    #    if self.source: data['source'] = self.source
-    #    return self.request(path, "POST", params, data, verbose=verbose)
 
     def save(self, verbose=None):
-        """ /pages/:page_id.json에 접근하여 page를 수정합니다. """
-        if self.id:
-            path = "/pages/%d.json" % self.id
-            method = "PUT"
-        else:
-            path = "/pages.json"
-            method = "POST"
-
-        params = {}
-        if self.note:
-            params['domain'] = self.note
-        if params:
-            path += "?%s" % urllib.urlencode(params)
+        if self.id: method = "PUT"  # update existing page
+        else:       method = "POST" # create new page
+        path, params = self._set_path_params()
 
         data = {}
         for attr in self.writable_attributes:
@@ -555,4 +533,26 @@ class Page(SpringnoteResource):
     
         self.request(path, method, params=params, data=data, verbose=verbose)
         return self
+
+    def delete(self, verbose=None):
+        if self.id is None:
+            raise SpringnoteError.InvalidOption("need page id to perform delete()")
+        path, params = self._set_path_params()
+        return self.request(path, "DELETE", params=params, verbose=verbose)
+
+    def _set_path_params(self, params=None):
+        ''' format path and params, according to page id and note '''
+        # update params
+        if params is None: 
+            params = {}
+        if self.note:
+            params['domain'] = self.note
+
+        # update path
+        if self.id:     path  = "/pages/%d.json" % self.id
+        else:           path  = "/pages.json"
+        if params:      path += "?%s" % urllib.urlencode(params)
+
+        return (path, params)
+
 
