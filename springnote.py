@@ -12,7 +12,7 @@ __version__ = 1.0
 
 import env 
 
-import oauth, sys
+import oauth, sys, types
 import simplejson as json
 import httplib, urllib, socket
 
@@ -511,14 +511,6 @@ class Page(SpringnoteResource):
         path, params = self._set_path_params()
         return self.request(path, "GET", params=params, verbose=verbose)
 
-    def list(self, note=None, params={}, verbose=None):
-        if note:
-            params['domain'] = note
-        path = "/pages.json"
-        if params: 
-            path += "?%s" % urllib.urlencode(params)
-        return self.request(path, "GET", params, verbose=verbose)
-
 
     def save(self, verbose=None):
         if self.id: method = "PUT"  # update existing page
@@ -540,19 +532,77 @@ class Page(SpringnoteResource):
         path, params = self._set_path_params()
         return self.request(path, "DELETE", params=params, verbose=verbose)
 
-    def _set_path_params(self, params=None):
+    def _update_params(self, kwarg):
+        import re
+        _parameters_check = {
+            'sort'  : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
+            'order' : ['desc', 'asc'],
+            'offset': types.IntType,
+            'count' : types.IntType,
+            'q'     : types.StringTypes,
+            'tags'  : types.StringTypes,
+            'identifiers': re.compile("([0-9]+,)*[0-9]+"), 
+        }
+        params = {}
+        for key, value in kwarg.iteritems():
+            if key not in _parameters_check:
+                continue
+            check_method = _parameters_check[key]
+            # string in list
+            if isinstance(check_method, types.ListType):
+                if value in check_method: params[key] = value
+                else:
+                    msg = "%s is not allowed for %s" % (value, key)
+                    raise SpringnoteError.InvalidOption(msg)
+            # is string types
+            elif check_method is types.StringTypes:
+                params[key] = unicode(value)
+            # is some type
+            elif isinstance(check_method, types.TypeType):
+                try:
+                    params[key] = check_method(value)
+                except ValueError:
+                    msg = "%s is not allowed for %s" % (value, key)
+                    raise SpringnoteError.InvalidOption(msg)
+            # is regex pattern
+            elif isinstance(check_method, re._pattern_type):
+                if check_method.match(value): params[key] = value
+                else:
+                    msg = "%s is not allowed for %s" % (value, key)
+                    raise SpringnoteError.InvalidOption(msg)
+        return params
+
+
+    #def _set_path_params(self, note=None, id=None, params=None):
+    def _set_path_params(self, **kwarg):
         ''' format path and params, according to page id and note '''
+        #if params is None:  params = {}
+        #if note is False:   note = None
+        if 'note' in kwarg: note = kwarg['note']
+        else:               note = self.note
+        #if id is False:     id = None
+        if 'id' in kwarg:   id = kwarg['id']
+        else:               id = self.id
+
         # update params
-        if params is None: 
-            params = {}
-        if self.note:
-            params['domain'] = self.note
+        if id is None:  params = self._update_params(kwarg)
+        else:           params = {}
+        if note:
+            params['domain'] = note
 
         # update path
-        if self.id:     path  = "/pages/%d.json" % self.id
-        else:           path  = "/pages.json"
-        if params:      path += "?%s" % urllib.urlencode(params)
+        if id:      path  = "/pages/%d.json" % id
+        else:       path  = "/pages.json"
+        if params:  path += "?%s" % urllib.urlencode(params)
 
         return (path, params)
 
+    def list(self, verbose=None, **kwarg):
+        kwarg.update(id=None)
+        path, params = self._set_path_params(**kwarg) # ignores id
+        return self.request(path, "GET", params, verbose=verbose)
+        
+    def search(self, query, verbose=None, **kwarg):
+        kwarg.update(id=None, q=query)
+        return self.list(verbose=verbose, **kwarg)
 

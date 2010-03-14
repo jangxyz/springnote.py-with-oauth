@@ -65,14 +65,15 @@ def should_call_method(object, method_name, callable):
 def should_raise(exception, callable):
     try:
         callable()
-        self.fail("did not raise exception %s" % exception)
+        raise AssertionError, "did not raise exception %s" % exception
     except exception:
         pass # proper exception raised
     except Exception, e:
         error_msg = 'expected %s to be raised but instead got %s:"%s"' % (exception, type(e), e)
         raise AssertionError, error_msg
 
-class CrudPageTestCase(unittest.TestCase):
+class PageRequestTestCase(unittest.TestCase):
+    ''' set of tests about requests in Page resource '''
     def setUp(self):
         self.springnote = springnote.Springnote()
         mock_springnote_class()
@@ -106,8 +107,8 @@ class CrudPageTestCase(unittest.TestCase):
     def get_method_with_id_calls_get_page_request(self):
         """ page.get() with id calls get page request
 
-        Page(self.token, id=123).get()
-        calls springnote_request(method="GET", url=".*/pages/123[.].*", ...) """
+        Page(self.token, id=123).get() calls 
+        springnote_request(method="GET", url=".*/pages/123[.].*", ...) """
         id = 123
 
         # mock
@@ -136,8 +137,8 @@ class CrudPageTestCase(unittest.TestCase):
     @unittest.test
     def save_method_without_id_calls_create_page_request(self):
         """ page.save() without id calls create page request
-        Page(self.token, title='title', source='source').save()
-        calls springnote_request(method="POST", body={title:..,source:..}, ..) """
+        Page(self.token, title='title', source='source').save() calls 
+        springnote_request(method="POST", body={title:..,source:..}, ..) """
 
         title  = 'some title'
         source = 'blah blah ahaha'
@@ -145,7 +146,7 @@ class CrudPageTestCase(unittest.TestCase):
         # TODO: check access token
         # TODO: replace with pmock.or
         # TODO: make regex more verbose
-        # methdo: "POST"
+        # method: "POST"
         # source: '{"page": {"source": "blah blah ahaha", "title": "some title"}}'
         pattern1 = '"title"\s*:\s*"%s"\s*,\s*"source"\s*:\s*"%s"' % (title, source)
         pattern2 = '"source"\s*:\s*"%s",\s*"title"\s*:\s*"%s"\s*' % (source, title)
@@ -160,8 +161,8 @@ class CrudPageTestCase(unittest.TestCase):
     @unittest.test
     def save_method_with_id_calls_update_page_request(self):
         """ page.save() with id calls update page request
-        Page(self.token, id=123, source='edited').save()
-        calls springnote_request(method="PUT", url="../123.", body={source:..}, ..) """
+        Page(self.token, id=123, source='edited').save() calls 
+        springnote_request(method="PUT", url="../123.", body={source:..}, ..) """
         id     = 123
         source = 'edited'
 
@@ -192,8 +193,8 @@ class CrudPageTestCase(unittest.TestCase):
     @unittest.test
     def delete_method_with_id_calls_delete_page_request(self):
         """ page.delete() with id calls delete page request
-        Page(self.token, id=123).delete() 
-        calls springnote_request(method="DELETE", url="../123.", ..) """
+        Page(self.token, id=123).delete() calls 
+        springnote_request(method="DELETE", url="../123.", ..) """
         id = 123
 
         # method: "DELETE"
@@ -239,7 +240,6 @@ class CrudPageTestCase(unittest.TestCase):
             note='ab', id=None: ('/pages.json?domain=ab',      {'domain':'ab'})
             note='ab', id=1234: ('/pages/1234.json?domain=ab', {'domain':'ab'}) 
         '''
-
         Page = springnote.Page
         t = self.token
 
@@ -254,6 +254,151 @@ class CrudPageTestCase(unittest.TestCase):
                         is_(('/pages.json?domain=ab',      {'domain':'ab'})))
         assert_that(Page(t, note='ab', id=1234)._set_path_params(),
                         is_(('/pages/1234.json?domain=ab', {'domain':'ab'})))
+
+    @unittest.test
+    def force_format_path_and_parameters(self):
+        ''' _set_path_params() updates note or id if additionaly given 
+
+        you can force override Page instance attributes '''
+
+        Page = springnote.Page
+        Page.format = Page._set_path_params
+        t = self.token
+
+        # cancel note
+        note = 'jangxyz'
+        path, params = Page(t, note=note, id=None).format(note=None)
+        assert_that(params, is_not(has_key('domain')))
+        assert_that(params, is_not(has_value(note)))
+
+        # cancel id
+        id = 123
+        path, params = Page(t, id=id).format(id=None)
+        assert_that(path, is_not(string_contains(`id`)))
+
+    @unittest.test
+    def format_path_and_parameters_accepts_various_options(self):
+        """ _set_path_params() accepts various options as parameters
+
+        each of the following options are revealed in path and params:
+
+            sort: identifier | title | relation_is_par_of | date_modified | date_created 
+            order: desc | asc
+            offset, count
+            q: query
+            tags: filter by tags
+            identifiers: 1,2
+        """
+        page = springnote.Page(self.token)
+
+        # sort & order
+        path, params = page._set_path_params(sort='date_created', order='desc')
+        assert_that(path, string_contains('sort=date_created'))
+        assert_that(path, string_contains('order=desc'))
+        assert_that(params, has_entry('sort',  'date_created'))
+        assert_that(params, has_entry('order', 'desc'))
+
+        # search for query
+        path, params = page._set_path_params(q='unicode')
+        assert_that(path, string_contains('q=unicode'))
+        assert_that(params, has_entry('q', 'unicode'))
+
+        # search for escaped query
+        path, params = page._set_path_params(q='unicode encoding')
+        assert_that(path, string_contains('q=unicode%20encoding'))
+        assert_that(params, has_entry('q', 'unicode encoding'))
+
+        # filter by tags
+        path, params = page._set_path_params(tags='python')
+        assert_that(path, string_contains('tags=python'))
+        assert_that(params, has_entry('tags', 'python'))
+
+        # multiple identifiers
+        path, params = page._set_path_params(identifiers="100,333")
+        assert_that(path, string_contains('identifiers=100,333'))
+        assert_that(params, has_entry('identifiers', '100,333'))
+
+
+    @unittest.test
+    def format_path_and_parameters_raises_exception_on_invalid_option(self):
+        """ _set_path_params() raises InvalidOption if value is wrong 
+
+        each of the following options are revealed in path and params:
+
+            sort: not one of [identifier, title, relation_is_par_of, date_modified, date_created] 
+            order: not either [desc, asc]
+            offset, count: not int
+            identifiers: is not form of /1,2/"""
+        page = springnote.Page(self.token)
+
+        # non-existing value raises InvalidOption
+        should_raise(springnote.SpringnoteError.InvalidOption, \
+            lambda: page._set_path_params(sort='iq', order='random'))
+
+        # wrong typed value raises InvaidOption
+        should_raise(springnote.SpringnoteError.InvalidOption, \
+            lambda: page._set_path_params(offset='a string value', count='much as i want'))
+
+        # wrong format of string raises InvalidOption
+        should_raise(springnote.SpringnoteError.InvalidOption, \
+            lambda: page._set_path_params(identifiers="every"))
+
+
+    @unittest.test
+    def list_method_calls_get_all_pages_request(self):
+        """ page.list() calls get all pages request 
+        Page(self.token).list() calls 
+        springnote_request(method="GET", url="../pages.json..", ..) """
+        # method: "GET"
+        # url:    "../pages.json.."
+        url_pattern = re.compile("/pages[.]json")
+        self.expects_springnote_request.with_at_least(
+            method = eq("GET"), 
+            url    = string_contains(url_pattern)
+        )
+        springnote.Page(self.token).list()
+
+    @unittest.test
+    def list_method_ignores_page_id(self):
+        """ page.list() ignores page_id, doesn't use it even if given
+        Page(self.token, id=123).list() calls 
+        springnote_request(method="GET", url="../pages.json..", ..) """
+        id = 123
+
+        # url: not "../pages/123.json.."
+        url_pattern = re.compile("/pages/%d[.]" % id)
+        self.expects_springnote_request.with_at_least(
+            method = eq("GET"), 
+            url    = string_not_contains(url_pattern)
+        )
+        springnote.Page(self.token, id=id).list()
+        
+    @unittest.test
+    def list_method_calls_set_path_params(self):
+        ''' page.list() calls _set_path_params() '''
+        note = 'jangxyz'
+        should_call_method(springnote.Page, '_set_path_params', 
+            lambda: springnote.Page(self.token, note=note).list()
+        )
+
+    @unittest.test
+    def search_method_calls_get_all_pages_request(self):
+        """ page.search() accepts query explicitly, rest is same with list()
+
+        Page(self.token).search(query='name') calls 
+        springnote_request(method="GET", url="../pages.json..", ..) """
+        query="keyword"
+
+        # url: "../pages/123.json.."
+        # params: 
+        url_pattern = re.compile("/pages[.].*q=%s" % query)
+        self.expects_springnote_request.with_at_least(
+            method = eq("GET"), 
+            url    = string_contains(url_pattern),
+            params = dict_including({'q': query})
+        )
+        springnote.Page(self.token, id=id).search(query=query)
+
 
 
 
