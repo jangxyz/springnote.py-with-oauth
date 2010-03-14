@@ -62,3 +62,16 @@ class StringContainsConstraint(object):
 def string_contains(expected):
     return StringContainsConstraint(expected)
 
+##
+##
+
+class StringNotContainsConstraint(StringContainsConstraint):
+    def __repr__(self):
+        return "%s.string_not_contains(%s)" % (__name__, repr(self._expected))
+    def eval(self, arg):
+        return not StringContainsConstraint.eval(self, arg)
+
+def string_not_contains(expected):
+    return StringNotContainsConstraint(expected)
+
+
