@@ -581,6 +581,20 @@ class TestLoader:
                 return True
             return hasattr(attr, "_unittest_test")
         testFnNames = filter(isTestMethod, dir(testCaseClass))
+        # jangxyz-start
+        def filter_test_only(testCaseClass=testCaseClass, prefix=self.testMethodPrefix):
+            results = []
+            for attrname in dir(testCaseClass):
+                attr = getattr(testCaseClass, attrname)
+                if attrname.startswith(prefix) and callable(attr):
+                    results.append(attrname)
+                if hasattr(attr, "_unittest_test"):
+                    results.append(attrname)
+                if hasattr(attr, "_unittest_testonly"):
+                    return [attrname]
+            return results
+        testFnNames = filter_test_only(testCaseClass)
+        # jangxyz-end
         for baseclass in testCaseClass.__bases__:
             for testFnName in self.getTestCaseNames(baseclass):
                 if testFnName not in testFnNames:  # handle overridden methods
@@ -743,6 +757,13 @@ class TextTestRunner:
 def test(method):
     """A decorator for test cases."""
     method._unittest_test = True
+    return method
+
+# jangxyz
+def testonly(method):
+    """A decorator for testing only one."""
+    sys.stderr.write("[WARNING] running with 'testonly'. remove @unittest.testonly to fully run.\n\n")
+    method._unittest_testonly = True
     return method
 
 def setup(method):
