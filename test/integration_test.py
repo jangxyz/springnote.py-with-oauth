@@ -65,6 +65,7 @@ class IntegrationTestCase(unittest.TestCase):
 
 
         self.basic_function_calls(sn)
+        self.page_object_calls(sn)
 
         self.cleanup(sn)
 
@@ -182,6 +183,29 @@ class IntegrationTestCase(unittest.TestCase):
         url  = "http://api.springnote.com/pages/%d.json" % page_id
         resp = sn.springnote_request("DELETE", url, verbose=global_verbose)
         check(resp, "error on DELETE page")
+
+    def page_object_calls(self, sn):
+        # LIST page
+        #   get list of pages of default note            
+        print "test GET pages..",
+
+        # GET page
+        #   get most recently modified page              
+        print "test GET page..",
+
+        # POST page
+        #   create a page                                
+        print "test POST page..",
+
+        # PUT page
+        #   edit the page                                
+        print "test PUT page..",
+
+        # DELETE page
+        #   delete page                                  
+        print "test DELETE page",
+
+        
 
     def cleanup(self, sn):
         # delete garbage pages
