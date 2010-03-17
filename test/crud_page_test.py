@@ -23,9 +23,10 @@ class CMock(Mock):
     def __call__(self, *arg, **kwarg): return self
 
 def mock_springnote_class():
-    global original_sn, original_sn_rsrc
+    global original_sn, original_sn_rsrc, original_page
     original_sn = springnote.Springnote
     host = springnote.Springnote.HOST
+    original_page = springnote.Page
     springnote.Springnote = CMock()         # mock class Springnote
     springnote.Springnote.HOST = host
 
@@ -41,13 +42,16 @@ def mock_springnote_class():
 def restore_springnote_class():
     springnote.Springnote = original_sn
     springnote.SpringnoteResource = original_sn_rsrc
+    springnote.Page = original_page
     #springnote = original_module
 
-def should_call_method(object, method_name, callable):
+def should_call_method(object, method_name, callable, method_type=None):
     class IsCalled(Exception): pass
     def is_called(*args, **kwarg): raise IsCalled()
+    if method_type is not None: is_called = method_type(is_called)
     # save
     orig = getattr(object, method_name)
+    if method_type is not None: orig = method_type(orig)
     # patch
     setattr(object, method_name, is_called)
 
@@ -78,7 +82,6 @@ class PageRequestTestCase(unittest.TestCase):
         self.springnote = springnote.Springnote()
         mock_springnote_class()
         self.sn = springnote.Springnote
-
         self.m_get_response = Mock()
 
         self.expects_springnote_request = \
@@ -139,7 +142,6 @@ class PageRequestTestCase(unittest.TestCase):
         """ page.save() without id calls create page request
         Page(self.token, title='title', source='source').save() calls 
         springnote_request(method="POST", body={title:..,source:..}, ..) """
-
         title  = 'some title'
         source = 'blah blah ahaha'
 
@@ -346,8 +348,8 @@ class PageRequestTestCase(unittest.TestCase):
 
     @unittest.test
     def list_method_calls_get_all_pages_request(self):
-        """ page.list() calls get all pages request 
-        Page(self.token).list() calls 
+        """ Page.list() calls get all pages request 
+        Page.list(self.token) calls 
         springnote_request(method="GET", url="../pages.json..", ..) """
         # method: "GET"
         # url:    "../pages.json.."
@@ -356,40 +358,37 @@ class PageRequestTestCase(unittest.TestCase):
             method = eq("GET"), 
             url    = string_contains(url_pattern)
         )
-        springnote.Page(self.token).list()
-
-    @unittest.test
-    def list_method_ignores_page_id(self):
-        """ page.list() ignores page_id, doesn't use it even if given
-        Page(self.token, id=123).list() calls 
-        springnote_request(method="GET", url="../pages.json..", ..) """
-        id = 123
-
-        # url: not "../pages/123.json.."
-        url_pattern = re.compile("/pages/%d[.]" % id)
-        self.expects_springnote_request.with_at_least(
-            method = eq("GET"), 
-            url    = string_not_contains(url_pattern)
-        )
-        springnote.Page(self.token, id=id).list()
+        springnote.Page.list(self.token)
         
     @unittest.test
-    def list_method_calls_set_path_params(self):
-        ''' page.list() calls _set_path_params() '''
-        note = 'jangxyz'
-        should_call_method(springnote.Page, '_set_path_params', 
-            lambda: springnote.Page(self.token, note=note).list()
+    def list_method_calls_set_path_params_static(self):
+        ''' Page.list() calls _set_path_params_static() '''
+        should_call_method(springnote.Page, '_set_path_params_static', 
+            lambda: springnote.Page.list(self.token, note='jangxyz'), staticmethod
         )
+
+    @unittest.test
+    def list_method_with_note_puts_proper_path(self):
+        ''' Page.list() with note calls proper path '''
+        # method: "GET"
+        # url:    "../pages.json.."
+        note = 'jangxyz'
+        url_pattern = re.compile("/pages[.]json.*domain=%s" % note)
+        self.expects_springnote_request.with_at_least(
+            method = eq("GET"), 
+            url    = string_contains(url_pattern)
+        )
+        springnote.Page.list(self.token, note=note)
 
     @unittest.test
     def search_method_calls_get_all_pages_request(self):
-        """ page.search() accepts query explicitly, rest is same with list()
+        """ Page.search() accepts query explicitly, rest is same with list()
 
-        Page(self.token).search(query='name') calls 
+        Page.search(token, query='name') calls 
         springnote_request(method="GET", url="../pages.json..", ..) """
-        query="keyword"
+        query = "keyword"
 
-        # url: "../pages/123.json.."
+        # url: "../pages.json..q=keyword"
         # params: 
         url_pattern = re.compile("/pages[.].*q=%s" % query)
         self.expects_springnote_request.with_at_least(
@@ -397,7 +396,7 @@ class PageRequestTestCase(unittest.TestCase):
             url    = string_contains(url_pattern),
             params = dict_including({'q': query})
         )
-        springnote.Page(self.token, id=id).search(query=query)
+        springnote.Page.search(self.token, query=query)
 
 
 

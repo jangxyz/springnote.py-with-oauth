@@ -532,7 +532,9 @@ class Page(SpringnoteResource):
         path, params = self._set_path_params()
         return self.request(path, "DELETE", params=params, verbose=verbose)
 
-    def _update_params(self, kwarg):
+    @staticmethod
+    def _update_params(kwarg):
+        ''' update parameters, from dictionary '''
         import re
         _parameters_check = {
             'sort'  : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
@@ -573,19 +575,16 @@ class Page(SpringnoteResource):
         return params
 
 
-    #def _set_path_params(self, note=None, id=None, params=None):
-    def _set_path_params(self, **kwarg):
+    @staticmethod
+    def _set_path_params_static(**kwarg):
         ''' format path and params, according to page id and note '''
-        #if params is None:  params = {}
-        #if note is False:   note = None
         if 'note' in kwarg: note = kwarg['note']
-        else:               note = self.note
-        #if id is False:     id = None
-        if 'id' in kwarg:   id = kwarg['id']
-        else:               id = self.id
+        else:               note = None
+        if 'id'   in kwarg: id   = kwarg['id']
+        else:               id   = None
 
         # update params
-        if id is None:  params = self._update_params(kwarg)
+        if id is None:  params = Page._update_params(kwarg)
         else:           params = {}
         if note:
             params['domain'] = note
@@ -597,12 +596,23 @@ class Page(SpringnoteResource):
 
         return (path, params)
 
-    def list(self, verbose=None, **kwarg):
+    def _set_path_params(self, **kwarg):
+        ''' format path and params, according to page id and note '''
+        if 'note' not in kwarg: kwarg['note'] = self.note
+        if 'id'   not in kwarg: kwarg['id']   = self.id
+
+        return Page._set_path_params_static(**kwarg)
+
+    @classmethod
+    def list(cls, access_token, verbose=None, **kwarg):
         kwarg.update(id=None)
-        path, params = self._set_path_params(**kwarg) # ignores id
-        return self.request(path, "GET", params, verbose=verbose)
+        path, params = Page._set_path_params_static(**kwarg) # ignores id
+        # XXX: this won't work for processing response!
+        return SpringnoteResource(access_token).request(path, "GET", params, verbose=verbose)
         
-    def search(self, query, verbose=None, **kwarg):
+    @classmethod
+    def search(cls, access_token, query, verbose=None, **kwarg):
         kwarg.update(id=None, q=query)
-        return self.list(verbose=verbose, **kwarg)
+        return cls.list(access_token, verbose=verbose, **kwarg)
+
 
