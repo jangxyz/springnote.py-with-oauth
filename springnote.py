@@ -8,7 +8,7 @@
 """
 __author__  = "Jang-hwan Kim"
 __email__   = "janghwan at gmail dot com"
-__version__ = 1.0
+__version__ = 0.5
 
 import env 
 
@@ -17,12 +17,12 @@ import simplejson as json
 import httplib, urllib, socket
 
 # default consumer token (as springnote python library)
-CONSUMER_TOKEN_KEY    = '162DSyqm28o355V7zEKw'
-CONSUMER_TOKEN_SECRET = 'MtiDOAWsFkH2yOLzOYkubwFK6THOA5iAJIR4MJnwKMQ'
+# you should not use this if you want to build your own application
+DEFAULT_CONSUMER_TOKEN_KEY    = '162DSyqm28o355V7zEKw'
+DEFAULT_CONSUMER_TOKEN_SECRET = 'MtiDOAWsFkH2yOLzOYkubwFK6THOA5iAJIR4MJnwKMQ'
 
 default_verbose = False
 default_dry_run = False
-
 
 class SpringnoteError:
     class Base(Exception):
@@ -82,11 +82,11 @@ class Springnote:
     ACCESS_TOKEN_URL  = 'https://%s/oauth/access_token/springnote' % HOST
     AUTHORIZATION_URL = 'https://%s/oauth/authorize'               % HOST
     signature_method  = oauth.OAuthSignatureMethod_HMAC_SHA1()
-    consumer_token    = oauth.OAuthConsumer(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET)
+    consumer_token    = oauth.OAuthConsumer(DEFAULT_CONSUMER_TOKEN_KEY, DEFAULT_CONSUMER_TOKEN_SECRET)
 
     BOUNDARY          = 'AaB03x' 
 
-    def __init__(self, access_token=None, consumer_token=(CONSUMER_TOKEN_KEY, CONSUMER_TOKEN_SECRET), verbose=None):
+    def __init__(self, access_token=None, consumer_token=(DEFAULT_CONSUMER_TOKEN_KEY, DEFAULT_CONSUMER_TOKEN_SECRET), verbose=None):
         """ Springnote 인스턴스를 초기화합니다.
         
          - consumer_token: 개발자가 따로 정의하고 싶은 consumer token을 (key, secret) tuple로 넣어줍니다. 넣지 않으면 라이브러리의 기본 token을 사용합니다.
@@ -398,7 +398,6 @@ class SpringnoteResource:
         if not default_dry_run:
             if response.status != httplib.OK:
                 raise SpringnoteError.Response(response)
-
             return self._build_model_from_response(response.read(), verbose=verbose)
 
 
@@ -434,6 +433,9 @@ class SpringnoteResource:
         else:
             raise ParseError('unable to parse as predefined model: ' + data)
 
+    @staticmethod
+    def _to_unicode(s):
+        return eval('u"""%s"""' % s)
 
     def process_resource(self, resource_dict):
         """ resource마다 따로 필요한 후처리 작업을 해줍니다. 
@@ -445,8 +447,8 @@ class SpringnoteResource:
         [setattr(self, key, value) for key, value in resource_dict.iteritems()]
         # unicode
         for key, value in resource_dict.iteritems():
-            if isinstance(value, str):
-                setattr(self, key, eval('u"""%s"""' % value))
+            if isinstance(value, types.StringTypes):
+                setattr(self, key, self._to_unicode(value))
         # alias id
         if "identifier" in resource_dict:
             setattr(self, "id", resource_dict["identifier"])
@@ -473,7 +475,7 @@ class Page(SpringnoteResource):
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
 
     def __init__(self, access_token, note=None, id=None, 
-            title=None, source=None, relation_is_part_of=None, tags=None):
+            title=None, source=None, relation_is_part_of=None, tags=None, parent=None):
         """ can give writable_attribute arguments, so you can save easily later """
         SpringnoteResource.__init__(self, access_token)
         self.note   = note
@@ -608,7 +610,7 @@ class Page(SpringnoteResource):
         kwarg.update(id=None)
         path, params = Page._set_path_params_static(**kwarg) # ignores id
         # XXX: this won't work for processing response!
-        return SpringnoteResource(access_token).request(path, "GET", params, verbose=verbose)
+        return cls(access_token).request(path, "GET", params, verbose=verbose)
         
     @classmethod
     def search(cls, access_token, query, verbose=None, **kwarg):

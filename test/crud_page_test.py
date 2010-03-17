@@ -399,7 +399,116 @@ class PageRequestTestCase(unittest.TestCase):
         springnote.Page.search(self.token, query=query)
 
 
+class BuildModelFromResponseTestCase(unittest.TestCase):
+    # from http://dev.springnote.com/pages/413747
+    sample_json = '''{"page": {
+        "rights": null,
+        "source": "\u003Cp\u003ENone\u003C/p\u003E\n",
+        "creator": "http://deepblue.myid.net/",
+        "date_created": "2007/10/26 05:30:08 +0000",
+        "contributor_modified": "http://deepblue.myid.net/",
+        "date_modified": "2008/01/08 10:55:36 +0000",
+        "relation_is_part_of": 1,
+        "identifier": 4,
+        "tags": "test",
+        "title": "TestPage"
+    }}'''
+    sample_data =  {"page": {
+        "rights": None,
+        "source": "\u003Cp\u003ENone\u003C/p\u003E\n",
+        "creator": "http://deepblue.myid.net/",
+        "date_created": "2007/10/26 05:30:08 +0000",
+        "contributor_modified": "http://deepblue.myid.net/",
+        "date_modified": "2008/01/08 10:55:36 +0000",
+        "relation_is_part_of": 1,
+        "identifier": 4,
+        "tags": "test",
+        "title": "TestPage"
+    }}
+    def setUp(self):
+        self.o_Springnote = springnote.Springnote
+        self.o_json       = springnote.json
 
+        # mock objects
+        springnote.Springnote = CMock()
+        springnote.json       = Mock()
+        self.m_get_response   = Mock()
+
+        # default Springnote.springnote_request behavior
+        springnote.Springnote.expects(at_least_once()).method('springnote_request') \
+            .will(return_value(self.m_get_response))
+
+        # default json.loads behavior
+        springnote.json.expects(at_least_once()).method('loads') \
+            .will(return_value(self.sample_data))
+
+        # default response behavior
+        self.m_get_response.status = 200
+        self.m_get_response.expects(at_least_once()).read() \
+            .will(return_value(self.sample_json))
+
+        self.token = ('BOGUS', 'TOKEN')
+
+        # short conventions
+        #self.expects_springnote_request = \
+        #    springnote.Springnote.expects(once()).method('springnote_request') \
+        #    .will(return_value(self.m_get_response))
+        #self.response_expects = self.m_get_response.expects(once())
+
+                            
+    def tearDown(self):     
+        # restore original
+        springnote.Springnote = self.o_Springnote
+        springnote.json       = self.o_json
+                            
+                            
+    @unittest.test          
+    def should_load_json_after_request(self):
+        ''' calls json.load() after request() '''
+        # mock
+        springnote.json.expects(once()).method('loads') \
+            .will(return_value(self.sample_data))       \
+            .after("springnote_request", springnote.Springnote)
+
+        # run
+        springnote.Page(self.token).request("/some/path")
+
+
+    @unittest.test
+    def resource_attribute_should_be_same_with_json_data(self):
+        ''' json data is loaded in page.resource 
+        
+         * json data: {'page': {'title':'something'}} 
+         * .resource:          {'title':'something'}  '''
+        page = springnote.Page(self.token)
+        page.request("/some/path")
+
+        assert_that(page.resource, is_(self.sample_data['page']))
+
+    @unittest.test
+    def json_data_attributes_are_saved_as_instance_attributes(self):
+        ''' json data's key is stored as instance attributes '''
+        page = springnote.Page(self.token)
+        page.request("/some/path")
+
+        for attr_name in self.sample_data['page']:
+            assert_that(page, responds_to(attr_name))
+
+    @unittest.test
+    def changes_multiple_json_data(self):
+        ''' json list is changed to multiple page instances '''
+        list_sample_json = '[%s, %s]' % (self.sample_json, self.sample_json)
+        list_sample_data = [self.sample_data, self.sample_data]
+        # mock
+        springnote.json.expects(at_least_once()).method('loads') \
+            .will(return_value(list_sample_data))
+        self.m_get_response.expects(at_least_once()).read() \
+            .will(return_value(list_sample_json))
+
+        # run
+        pages = springnote.Page.list(self.token)
+        assert_that(pages, has_length(2))
+        assert_that(pages[0], (instance_of(springnote.Page)))
 
 if __name__ == '__main__':
     unittest.main()
