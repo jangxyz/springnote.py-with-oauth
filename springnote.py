@@ -407,19 +407,20 @@ class SpringnoteResource:
           * self.raw: response 본문이 저장됩니다.
           * self.resource: response의 내용이 dictionary 형태로 저장됩니다.
         """
+        cls = self.__class__
         self.raw = data
         if is_verbose(verbose):
             print '<< data:'
             print data
             print
         # build proper object
-        object_name = self.__class__.__name__.lower() # Page => 'page'
+        object_name = cls.__name__.lower() # Page => 'page'
         structure = json.loads(data)
         # build multiple data
         if type(structure) is list:
             multiple_resources = []
             for resource_dict in structure:
-                new_instance = self.__class__(self.access_token, parent=self.parent)
+                new_instance = cls(self.access_token, parent=self.parent)
                 new_instance.resource = resource_dict[object_name]
                 new_instance.process_resource(new_instance.resource)
                 multiple_resources.append( new_instance )

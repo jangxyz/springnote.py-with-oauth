@@ -7,12 +7,18 @@
 '''
 
 import test_env, unittest
+from hamcrest import *
 import datetime, sys
-from springnote import Springnote
+from springnote import Springnote, Page
 
 global_verbose = None
 
-def check(response, msg):
+def starting(msg):
+    print msg,
+    sys.stdout.flush()
+printout=starting
+
+def check_http_status(response, msg):
     import sys
     if response.status != 200:
         print msg
@@ -20,6 +26,9 @@ def check(response, msg):
         sys.exit(response.status)
     else:
         print "\tOK"
+
+def okay():
+    print "\tOK"
 
 def parse_data(json_body, keyword):
     partial = json_body.split(keyword, 2)
@@ -55,30 +64,32 @@ class IntegrationTestCase(unittest.TestCase):
         print 'start test at', test_id
 
         sn = Springnote()
-        # GET access token
-        #   get access key (user interaction needed)     
-        request_token = sn.auth.fetch_request_token(verbose=global_verbose)
-        print "\ngo to this url and approve:", sn.auth.authorize_url()
-        raw_input("Press enter when complete. ")
-        access_token = sn.auth.fetch_access_token(request_token, verbose=global_verbose)
-        print "test GET access token..", "\tOK"
-
-
-        self.basic_function_calls(sn)
-        self.page_object_calls(sn)
+        self._test_access_token(sn)
+        #self._test_basic_function_calls(sn)
+        self._test_page_object_calls(sn)
 
         self.cleanup(sn)
 
         print "done."
 
-    def basic_function_calls(self, sn):
+    def _test_access_token(self, sn):
+        ''' GET access token
+        get access key (user interaction needed) '''
+        request_token = sn.auth.fetch_request_token(verbose=global_verbose)
+        print "\ngo to this url and approve:", sn.auth.authorize_url()
+        raw_input("Press enter when complete. ")
+        access_token = sn.auth.fetch_access_token(request_token, verbose=global_verbose)
+        print "test GET access token..", 
+        okay()
+
+    def _test_basic_function_calls(self, sn):
         ''' calls each functions following the scenario, checking for response status 200 '''
         # LIST page
         #   get list of pages of default note            
         print "test GET pages..",
         url  = "http://api.springnote.com/pages.json"
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
-        check(resp, "error on LIST page with access token " + `(sn.access_token.key, sn.access_token.secret)`)
+        check_http_status(resp, "error on LIST page with access token " + `(sn.access_token.key, sn.access_token.secret)`)
         page_id = int(resp.read().split("identifier", 2)[1].split(",")[0].strip('\'": ')) 
 
         # AUTH access token
@@ -90,7 +101,7 @@ class IntegrationTestCase(unittest.TestCase):
         print "test GET page..",
         url  = 'http://api.springnote.com/pages/%d.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
-        check(resp, "error on GET page %d" % page_id)
+        check_http_status(resp, "error on GET page %d" % page_id)
 
         # POST page
         #   create a page                                
@@ -98,7 +109,7 @@ class IntegrationTestCase(unittest.TestCase):
         url  = 'http://api.springnote.com/pages.json'
         body = '{"page": {"source": "integration test. if you happen to see this, erase it for me", "tags": "springnote_oauth.py_integartion_test", "title": "test - %s"}}' % test_id
         resp = sn.springnote_request("POST", url, body=body, verbose=global_verbose)
-        check(resp, "error on POST page with body: %s" % body)
+        check_http_status(resp, "error on POST page with body: %s" % body)
         page_id = int(resp.read().split("identifier", 2)[1].split(",")[0].strip('\'": ')) 
 
         # PUT page
@@ -107,14 +118,14 @@ class IntegrationTestCase(unittest.TestCase):
         url  = 'http://api.springnote.com/pages/%d.json' % page_id
         body = '{"page": {"source": "edited"}}'
         resp = sn.springnote_request("PUT", url, body=body, verbose=global_verbose)
-        check(resp, "error on PUT page %d with body: %s" % (page_id, body))
+        check_http_status(resp, "error on PUT page %d with body: %s" % (page_id, body))
 
         # LIST revision
         #   get revisions of the page                    
         print "test LIST revisions..",
         url  = 'http://api.springnote.com/pages/%d/revisions.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
-        check(resp, "error on LIST revisions")
+        check_http_status(resp, "error on LIST revisions")
         revision_id = parse_data(resp.read(), "identifier")
 
         # GET revision
@@ -122,21 +133,21 @@ class IntegrationTestCase(unittest.TestCase):
         print "test GET revisiosn..",
         url  = 'http://api.springnote.com/pages/%d/revisions/%d.json' % (page_id, revision_id)
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
-        check(resp, "error on GET revision")
+        check_http_status(resp, "error on GET revision")
 
         # LIST collaboration
         #   get collaborations of the page               
         print "test LIST collaboration",
         url  = 'http://api.springnote.com/pages/%d/collaboration.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
-        check(resp, "error on LIST collaboration")
+        check_http_status(resp, "error on LIST collaboration")
 
         # LIST attachments
         #   get attachments of the page                  
         print "test LIST attachments",
         url  = 'http://api.springnote.com/pages/%d/attachments.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
-        check(resp, "error on LIST attachments")
+        check_http_status(resp, "error on LIST attachments")
 
         # POST attachment
         #   post attachment to the page                  
@@ -145,7 +156,7 @@ class IntegrationTestCase(unittest.TestCase):
         data = open(__file__, 'rb') # i shall sacrifice myself for testing!
         resp = sn.springnote_request("POST", url, body=data, verbose=global_verbose)
         data.close()
-        check(resp, "error on POST attachment")
+        check_http_status(resp, "error on POST attachment")
         attachment_id = parse_data(resp.read(), "identifier")
 
         # PUT attachment
@@ -154,56 +165,77 @@ class IntegrationTestCase(unittest.TestCase):
         url  = 'http://api.springnote.com/pages/%d/attachments/%d.json' % (page_id, attachment_id)
         data = open(__file__, 'rb') 
         resp = sn.springnote_request("PUT", url, body=data, verbose=global_verbose)
-        check(resp, "error on PUT attachment")
+        check_http_status(resp, "error on PUT attachment")
 
         # GET attachment
         #   get information about attachment
         print "test GET attachment",
         url  = 'http://api.springnote.com/pages/%d/attachments/%d.json' % (page_id, attachment_id)
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
-        check(resp, "error on GET attachment")
+        check_http_status(resp, "error on GET attachment")
 
         # DOWNLOAD attachment
         #   download attachment of the page              
         print "test DOWNLOAD attachment",
         url  = 'http://api.springnote.com/pages/%d/attachments/%d' % (page_id, attachment_id)
         resp = sn.springnote_request("GET", url, headers={}, verbose=global_verbose)
-        check(resp, "error on DOWNLOAD attachment")
+        check_http_status(resp, "error on DOWNLOAD attachment")
 
         # DELETE attachment
         #   delete attachment to the page                
         print "test DELETE attachment",
         url  = 'http://api.springnote.com/pages/%d/attachments/%d.json' % (page_id, attachment_id)
         resp = sn.springnote_request("DELETE", url, verbose=global_verbose)
-        check(resp, "error on DELETE attachment")
+        check_http_status(resp, "error on DELETE attachment")
 
         # DELETE page
         #   delete page                                  
-        print "test DELETE page",
+        starting("test DELETE page")
         url  = "http://api.springnote.com/pages/%d.json" % page_id
         resp = sn.springnote_request("DELETE", url, verbose=global_verbose)
-        check(resp, "error on DELETE page")
+        check_http_status(resp, "error on DELETE page")
 
-    def page_object_calls(self, sn):
-        # LIST page
-        #   get list of pages of default note            
-        print "test GET pages..",
+    def _test_page_object_calls(self, sn):
+        token = sn.access_token
+        # LIST page: get list of pages of default note            
+        starting("test GET pages..")
+        pages = Page(token).list()
+        printout("%d pages" % len(pages))
+        
+        # LIST page with options
+        last_modified = sorted(pages, \
+            cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
+        most_recent = Page(token).list(sort="date_modified", order="desc", count=1)[0]
+        for attr in ["identifier", "title", "source", "date_modified"]:
+            last_modified_attr = getattr(last_modified, attr)
+            most_recent_attr   = getattr(most_recent, attr)
+            assert_that(last_modified_attr, is_(equal_to(most_recent_attr)))
+        okay()
 
-        # GET page
-        #   get most recently modified page              
-        print "test GET page..",
+        # GET page: get most recently modified page
+        starting("test GET page..")
+        page = Page(token, id=last_modified.id).get()
+        assert_that(page.title, is_(equal_to(last_modified.title)))
+        okay()
 
-        # POST page
-        #   create a page                                
-        print "test POST page..",
+        # POST page: create a page
+        starting("test POST page..")
+        page = Page(token, title="POST test for %s" % test_id, source="hola!").save()
+        new_pages = Page(token).list()
+        assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
+        okay()
 
-        # PUT page
-        #   edit the page                                
-        print "test PUT page..",
+        # PUT page: edit the page
+        starting("test PUT page..")
+        page.source = "modified"
+        page.save()
+        refetch = Page(token, id=page.id)
+        assert_that(refetch.source, contains_string("modified"))
+        okay()
 
         # DELETE page
         #   delete page                                  
-        print "test DELETE page",
+        starting("test DELETE page")
 
         
 
