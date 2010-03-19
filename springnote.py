@@ -17,7 +17,7 @@ import simplejson as json
 import httplib, urllib, socket
 
 # default consumer token (as springnote python library)
-# you should not use this if you want to build your own application
+# you should change this if you want to build your own application
 DEFAULT_CONSUMER_TOKEN_KEY    = '162DSyqm28o355V7zEKw'
 DEFAULT_CONSUMER_TOKEN_SECRET = 'MtiDOAWsFkH2yOLzOYkubwFK6THOA5iAJIR4MJnwKMQ'
 
@@ -88,18 +88,19 @@ class Springnote:
     BOUNDARY         = 'AaB03x' 
 
     def __init__(self, access_token=None, consumer_token=(DEFAULT_CONSUMER_TOKEN_KEY, DEFAULT_CONSUMER_TOKEN_SECRET), verbose=None):
-        """ Springnote 인스턴스를 초기화합니다.
+        """ consumer token을 초기화하고, 경우에 따라 access token도 있으면 
+        초기화해서 바로 사용할 수 있습니다.
         
-         - consumer_token: 개발자가 따로 정의하고 싶은 consumer token을 (key, secret) tuple로 넣어줍니다. 넣지 않으면 라이브러리의 기본 token을 사용합니다.
-         - access_token: 이전에 사용자가 승인하여 얻은 access token이 있으면 그것을 바로 넣어줄 수 있습니다. 만료가 되지 않았다면 바로 사용할 수 있습니다.
+         - consumer_token: 개발자가 정의하고 싶은 consumer token을 
+             (key, secret) tuple로 넣어줍니다. 
+             넣지 않으면 라이브러리의 기본 token을 사용합니다.
+         - access_token: 사용자가 전에 승인하여 얻은 access token이
+             있으면 그것을 바로 넣어줄 수 있습니다. 
+             만료가 되지 않았다면 바로 사용할 수 있습니다.
+             없으면 사용자 동의 하에 새로 받을 수 있습니다.
         """
-        #self.auth = self.SpringnoteAuth(self)
-
-        self.consumer_token = oauth.OAuthConsumer(*consumer_token)
-        self.access_token   = None
-        # set access token if already known
-        if access_token:
-            self.set_access_token(access_token)
+        self.consumer_token = self.format_token(consumer_token)
+        self.set_access_token(access_token)
 
         self.verbose = verbose
 
@@ -197,7 +198,14 @@ class Springnote:
         ])
 
     def set_access_token(self, *args):
-        """ 직접 access token을 지정합니다. """
+        """ 직접 access token을 지정합니다. 
+        
+        >> sn = Springnote()
+        >> sn.set_access_token(('SOME_ACCESS', 'TOKEN'))
+        <oauth.OAuthToken object ...>
+        >> sn.set_access_token('SOME_ACCESS', 'TOKEN')
+        <oauth.OAuthToken object ...>
+        """
         self.access_token = self.format_token(*args)
         return self.access_token
 
@@ -210,6 +218,7 @@ class Springnote:
             'POST', url=REQUEST_TOKEN_URL, 
             secure=True, sign_token=None, verbose=verbose)
 
+        # parse request token
         if not default_dry_run:
             if response.status != httplib.OK:
                 raise SpringnoteError.Response(response)
@@ -236,7 +245,6 @@ class Springnote:
         access token은 request token이 있어야 하며, fetch_request_token()이 사전에 불렸어야 합니다.
         """
         # request to springnote.com
-        #response = self.sn.springnote_request(
         response = self.springnote_request(
             'POST', ACCESS_TOKEN_URL, 
             sign_token=request_token, secure=True, verbose=verbose)
@@ -288,11 +296,11 @@ class SpringnoteResource:
         Page, Attachment 등이 이 클래스를 상속합니다 """
     attributes = [] # 각 리소스가 사용하는 attribute
 
-    def __init__(self, access_token, parent=None):
-        self.access_token = access_token # 모든 request 시에 필요한 access token
-        self.parent       = parent
-        self.resource     = None         # 스프링노트의 리소스를 담는 dictionary 
-        self.raw          = ''           # request의 결과로 가져온 raw data
+    def __init__(self, auth, parent=None):
+        self.auth     = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
+        self.parent   = parent
+        self.resource = None    # 스프링노트의 리소스를 담는 dictionary 
+        self.raw      = ''      # request의 결과로 가져온 raw data
         return
 
     def request(self, path, method="GET", params={}, data=None, verbose=None):
@@ -321,12 +329,10 @@ class SpringnoteResource:
             print ' * headers:',     headers
 
         # send request
-        response = Springnote(self.access_token).springnote_request(
-                    method=method, url=url, params=params, 
+        response = Springnote(self.auth.access_token, self.auth.consumer_token) \
+            .springnote_request(method=method, url=url, params=params, 
                     headers=headers, body=data,
-                    sign_token = self.access_token, 
-                    secure     = use_https, 
-                    verbose    = verbose
+                    secure=use_https, verbose = verbose
         )
         if not default_dry_run:
             if response.status != httplib.OK:
@@ -353,7 +359,7 @@ class SpringnoteResource:
         if type(structure) is list:
             multiple_resources = []
             for resource_dict in structure:
-                new_instance = cls(self.access_token, parent=self.parent)
+                new_instance = cls(self.auth, parent=self.parent)
                 new_instance.resource = resource_dict[object_name]
                 new_instance.process_resource(new_instance.resource)
                 multiple_resources.append( new_instance )
@@ -422,10 +428,11 @@ class Page(SpringnoteResource):
         'identifiers': re.compile("([0-9]+,)*[0-9]+"), 
     }
 
-    def __init__(self, access_token, note=None, id=None, 
-            title=None, source=None, relation_is_part_of=None, tags=None, parent=None):
+    def __init__(self, auth, note=None, id=None, 
+            title=None, source=None, relation_is_part_of=None, tags=None,
+            parent=None):
         """ can give writable_attribute arguments, so you can save easily later """
-        SpringnoteResource.__init__(self, access_token)
+        SpringnoteResource.__init__(self, auth)
         self.note     = note
         self.resource = {}
         self.id     = id
@@ -546,7 +553,7 @@ class Page(SpringnoteResource):
 
 
     @classmethod
-    def list(cls, access_token, note=None, verbose=None, **kwarg):
+    def list(cls, auth, note=None, verbose=None, **kwarg):
         ''' get list of pages, that matches the criterion 
         
         NOTE: not all attributes are loaded, only the following are:
@@ -557,10 +564,10 @@ class Page(SpringnoteResource):
             kwarg.update(note=note)
 
         path, params = Page._set_path_params_static(**kwarg) # ignores id
-        return cls(access_token).request(path, "GET", params, verbose=verbose)
+        return cls(auth).request(path, "GET", params, verbose=verbose)
         
     @classmethod
-    def search(cls, access_token, query, note=None, verbose=None, **kwarg):
+    def search(cls, auth, query, note=None, verbose=None, **kwarg):
         kwarg.update(q=query)
-        return cls.list(access_token, note=note, verbose=verbose, **kwarg)
+        return cls.list(auth, note=note, verbose=verbose, **kwarg)
 

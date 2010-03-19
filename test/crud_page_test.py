@@ -76,6 +76,36 @@ def should_raise(exception, callable):
         error_msg = 'expected %s to be raised but instead got %s:"%s"' % (exception, type(e), e)
         raise AssertionError, error_msg
 
+class PageRequestAndSpringnoteRequestTestCase(unittest.TestCase):
+
+    # i don't know how to test this;;
+    def request_method_calls_springnote_request_with_access_and_consumer_token(self):
+        ''' Page.request calls Springnote.springnote_request
+        preserves access token and consumer token'''
+
+        # mock out 
+        original_httplib = springnote.httplib
+        springnote.httplib = Mock() # mock httplib
+
+        # mock
+        url_pattern = "/pages/%d." % id
+        self.expects_springnote_request .with_at_least(
+            method = eq("GET"), 
+            url    = string_contains(url_pattern)
+        )
+        # run
+        springnote.Page(self.auth).request("/some/path")
+
+        springnote.httplib.expects(once()).method("HTTPConnection") \
+            .will(return_value(conn))
+        conn.expects(once()).getresponse()
+        conn.expects(once()).method("request") \
+            .with_at_least(headers=includes_valid_oauth_param())
+
+        # restore
+        springnote.httplib = original_httplib
+
+
 class PageRequestTestCase(unittest.TestCase):
     ''' set of tests about requests in Page resource '''
     def setUp(self):
@@ -92,7 +122,10 @@ class PageRequestTestCase(unittest.TestCase):
         self.m_get_response.expects(once()).read()
         self.m_get_response.status = 200
 
-        self.token = ('FAKE_KEY', 'FAKE_SECRET')
+        #self.auth = ('FAKE_KEY', 'FAKE_SECRET')
+        self.auth = Mock()
+        self.auth.access_token = ('ACCESS', 'TOKEN')
+        self.auth.consumer_token = ('CONSUMER', 'TOKEN')
 
     def tearDown(self):
         restore_springnote_class()
@@ -110,7 +143,7 @@ class PageRequestTestCase(unittest.TestCase):
     def get_method_with_id_calls_get_page_request(self):
         """ page.get() with id calls get page request
 
-        Page(self.token, id=123).get() calls 
+        Page(self.auth, id=123).get() calls 
         springnote_request(method="GET", url=".*/pages/123[.].*", ...) """
         id = 123
 
@@ -120,27 +153,27 @@ class PageRequestTestCase(unittest.TestCase):
             method = eq("GET"), 
             url    = string_contains(url_pattern)
         )
-        springnote.Page(self.token, id=id).get()
+        springnote.Page(self.auth, id=id).get()
 
     @unittest.test
     def get_method_without_id_is_invalid(self):
         """ page.get() without id is invalid 
-        Page(self.token).get() raises InvalidOption error """
+        Page(self.auth).get() raises InvalidOption error """
         should_raise(springnote.SpringnoteError.InvalidOption, \
-            lambda: springnote.Page(self.token).get())
+            lambda: springnote.Page(self.auth).get())
 
     @unittest.test
     def get_method_calls_set_path_params(self):
         ''' page.get() calls _set_path_params() '''
         note, id = 'jangxyz', 123
         should_call_method(springnote.Page, '_set_path_params', 
-            lambda: springnote.Page(self.token, note=note, id=id).get()
+            lambda: springnote.Page(self.auth, note=note, id=id).get()
         )
 
     @unittest.test
     def save_method_without_id_calls_create_page_request(self):
         """ page.save() without id calls create page request
-        Page(self.token, title='title', source='source').save() calls 
+        Page(self.auth, title='title', source='source').save() calls 
         springnote_request(method="POST", body={title:..,source:..}, ..) """
         title  = 'some title'
         source = 'blah blah ahaha'
@@ -157,13 +190,13 @@ class PageRequestTestCase(unittest.TestCase):
             .with_at_least(method=eq("POST"), body=string_contains(body_pattern))
 
         # run
-        springnote.Page(self.token, title=title, source=source).save()
+        springnote.Page(self.auth, title=title, source=source).save()
 
 
     @unittest.test
     def save_method_with_id_calls_update_page_request(self):
         """ page.save() with id calls update page request
-        Page(self.token, id=123, source='edited').save() calls 
+        Page(self.auth, id=123, source='edited').save() calls 
         springnote_request(method="PUT", url="../123.", body={source:..}, ..) """
         id     = 123
         source = 'edited'
@@ -180,7 +213,7 @@ class PageRequestTestCase(unittest.TestCase):
         )
 
         # run
-        springnote.Page(self.token, id=id, source=source).save()
+        springnote.Page(self.auth, id=id, source=source).save()
 
 
     @unittest.test
@@ -188,14 +221,14 @@ class PageRequestTestCase(unittest.TestCase):
         ''' page.save() calls _set_path_params() '''
         note, id = 'jangxyz', 123
         should_call_method(springnote.Page, '_set_path_params', 
-            lambda: springnote.Page(self.token, note=note, id=id).save()
+            lambda: springnote.Page(self.auth, note=note, id=id).save()
         )
 
 
     @unittest.test
     def delete_method_with_id_calls_delete_page_request(self):
         """ page.delete() with id calls delete page request
-        Page(self.token, id=123).delete() calls 
+        Page(self.auth, id=123).delete() calls 
         springnote_request(method="DELETE", url="../123.", ..) """
         id = 123
 
@@ -208,14 +241,14 @@ class PageRequestTestCase(unittest.TestCase):
         )
 
         # run
-        springnote.Page(self.token, id=id).delete()
+        springnote.Page(self.auth, id=id).delete()
 
     @unittest.test
     def delete_method_calls__set_path_params(self):
         ''' page.delete() calls _set_path_params() '''
         note, id = 'jangxyz', 123
         should_call_method(springnote.Page, '_set_path_params', 
-            lambda: springnote.Page(self.token, note=note, id=id).delete()
+            lambda: springnote.Page(self.auth, note=note, id=id).delete()
         )
 
 
@@ -223,9 +256,9 @@ class PageRequestTestCase(unittest.TestCase):
     def delete_method_without_id_is_invalid(self):
         """ page.delete() without id is invalid
         
-        Page(self.token).delete() raises InvalidOption error """
+        Page(self.auth).delete() raises InvalidOption error """
         try:
-            springnote.Page(self.token).delete()
+            springnote.Page(self.auth).delete()
             self.fail("did not raise exception")
         except springnote.SpringnoteError.InvalidOption:
             pass # proper exception raised
@@ -243,7 +276,7 @@ class PageRequestTestCase(unittest.TestCase):
             note='ab', id=1234: ('/pages/1234.json?domain=ab', {'domain':'ab'}) 
         '''
         Page = springnote.Page
-        t = self.token
+        t = self.auth
 
         # no note
         assert_that(Page(t, note=None, id=None)._set_path_params(),
@@ -265,7 +298,7 @@ class PageRequestTestCase(unittest.TestCase):
 
         Page = springnote.Page
         Page.format = Page._set_path_params
-        t = self.token
+        t = self.auth
 
         # cancel note
         note = 'jangxyz'
@@ -291,7 +324,7 @@ class PageRequestTestCase(unittest.TestCase):
             tags: filter by tags
             identifiers: 1,2
         """
-        page = springnote.Page(self.token)
+        page = springnote.Page(self.auth)
 
         # sort & order
         path, params = page._set_path_params(sort='date_created', order='desc')
@@ -331,7 +364,7 @@ class PageRequestTestCase(unittest.TestCase):
             order: not either [desc, asc]
             offset, count: not int
             identifiers: is not form of /1,2/"""
-        page = springnote.Page(self.token)
+        page = springnote.Page(self.auth)
 
         # non-existing value raises InvalidOption
         should_raise(springnote.SpringnoteError.InvalidOption, \
@@ -349,7 +382,7 @@ class PageRequestTestCase(unittest.TestCase):
     @unittest.test
     def list_method_calls_get_all_pages_request(self):
         """ Page.list() calls get all pages request 
-        Page.list(self.token) calls 
+        Page.list(self.auth) calls 
         springnote_request(method="GET", url="../pages.json..", ..) """
         # method: "GET"
         # url:    "../pages.json.."
@@ -358,13 +391,13 @@ class PageRequestTestCase(unittest.TestCase):
             method = eq("GET"), 
             url    = string_contains(url_pattern)
         )
-        springnote.Page.list(self.token)
+        springnote.Page.list(self.auth)
         
     @unittest.test
     def list_method_calls_set_path_params_static(self):
         ''' Page.list() calls _set_path_params_static() '''
         should_call_method(springnote.Page, '_set_path_params_static', 
-            lambda: springnote.Page.list(self.token, note='jangxyz'), staticmethod
+            lambda: springnote.Page.list(self.auth, note='jangxyz'), staticmethod
         )
 
     @unittest.test
@@ -378,7 +411,7 @@ class PageRequestTestCase(unittest.TestCase):
             method = eq("GET"), 
             url    = string_contains(url_pattern)
         )
-        springnote.Page.list(self.token, note=note)
+        springnote.Page.list(self.auth, note=note)
 
     @unittest.test
     def search_method_calls_get_all_pages_request(self):
@@ -396,7 +429,7 @@ class PageRequestTestCase(unittest.TestCase):
             url    = string_contains(url_pattern),
             params = dict_including({'q': query})
         )
-        springnote.Page.search(self.token, query=query)
+        springnote.Page.search(self.auth, query=query)
 
 
 class BuildModelFromResponseTestCase(unittest.TestCase):
@@ -447,7 +480,10 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         self.m_get_response.expects(at_least_once()).read() \
             .will(return_value(self.sample_json))
 
-        self.token = ('BOGUS', 'TOKEN')
+        #self.auth = ('BOGUS', 'TOKEN')
+        self.auth = Mock()
+        self.auth.access_token = ('ACCESS', 'TOKEN')
+        self.auth.consumer_token = ('CONSUMER', 'TOKEN')
 
         # short conventions
         #self.expects_springnote_request = \
@@ -471,7 +507,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
             .after("springnote_request", springnote.Springnote)
 
         # run
-        springnote.Page(self.token).request("/some/path")
+        springnote.Page(self.auth).request("/some/path")
 
 
     @unittest.test
@@ -480,7 +516,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         
          * json data: {'page': {'title':'something'}} 
          * .resource:          {'title':'something'}  '''
-        page = springnote.Page(self.token)
+        page = springnote.Page(self.auth)
         page.request("/some/path")
 
         assert_that(page.resource, is_(self.sample_data['page']))
@@ -488,7 +524,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
     @unittest.test
     def json_data_attributes_are_saved_as_instance_attributes(self):
         ''' json data's key is stored as instance attributes '''
-        page = springnote.Page(self.token)
+        page = springnote.Page(self.auth)
         page.request("/some/path")
 
         for attr_name in self.sample_data['page']:
@@ -513,7 +549,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
     def json_data_values_are_saved_as_instance_attributes(self):
         ''' json data's value is stored in instance attributes,
         except for 'tags' '''
-        page = springnote.Page(self.token)
+        page = springnote.Page(self.auth)
         page.request("/some/path")
 
         to_unicode = springnote.Page._to_unicode
@@ -535,14 +571,14 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
             .will(return_value(list_sample_json))
 
         # run
-        pages = springnote.Page.list(self.token)
+        pages = springnote.Page.list(self.auth)
         assert_that(pages, has_length(2))
         assert_that(pages[0], (instance_of(springnote.Page)))
 
     @unittest.test
     def other_page_methods_calls_request(self):
         ''' get, save, delete calls method request '''
-        page = springnote.Page(self.token, id=123)
+        page = springnote.Page(self.auth, id=123)
 
         should_call_method(page, 'request', lambda: page.get())
         should_call_method(page, 'request', lambda: page.save())

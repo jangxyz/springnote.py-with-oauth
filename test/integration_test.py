@@ -208,16 +208,16 @@ class IntegrationTestCase(unittest.TestCase):
         check_http_status(resp, "error on DELETE page")
 
     def _test_page_object_calls(self, sn):
-        token = sn.access_token
+        auth = sn
         # LIST page: get list of pages of default note            
         _starting("test Page.list()..")
-        pages = Page.list(token)
+        pages = Page.list(auth)
         _printout("%d pages" % len(pages))
         
         # LIST page with options
         last_modified = sorted(pages, \
             cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
-        most_recent = Page.list(token, sort="date_modified", order="desc", count=1)[0]
+        most_recent = Page.list(auth, sort="date_modified", order="desc", count=1)[0]
         for attr in ["identifier", "title", "source", "date_modified"]:
             last_modified_attr = getattr(last_modified, attr)
             most_recent_attr   = getattr(most_recent, attr)
@@ -226,26 +226,26 @@ class IntegrationTestCase(unittest.TestCase):
 
         # GET page: get most recently modified page
         _starting("test page.get() READ ..")
-        page = Page(token, id=last_modified.id).get()
+        page = Page(auth, id=last_modified.id).get()
         assert_that(page.title, is_(equal_to(last_modified.title)))
         _okay()
 
         # POST page: create a page
         _starting("test page.save() CREATE ..")
-        page = Page(token, 
+        page = Page(auth, 
             title  = "POST test for %s" % test_id, 
             source = "hola!",
             tags   = global_tag
         ).save()
-        new_pages = Page.list(token)
+        new_pages = Page.list(auth)
         assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
         _okay()
 
         # PUT page: edit the page
-        _starting("test page.save() PUT ..")
+        _starting("test page.save() UPDATE ..")
         page.source = "modified"
         page.save()
-        refetch = Page(token, id=page.id).get()
+        refetch = Page(auth, id=page.id).get()
         assert_that(refetch.source, contains_string("modified"))
         _okay()
 
@@ -254,7 +254,7 @@ class IntegrationTestCase(unittest.TestCase):
         _starting("test page.delete() DELETE ..")
         page.delete()
         should_raise(SpringnoteError.Response, 
-            lambda: Page(token, id=page.id).get()
+            lambda: Page(auth, id=page.id).get()
         )
         _okay()
         
