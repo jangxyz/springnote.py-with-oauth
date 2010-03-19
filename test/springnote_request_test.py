@@ -176,10 +176,13 @@ class HttpParamsTestCase(unittest.TestCase):
 
 
 class OauthRequestTestCase(unittest.TestCase):
+    def setUp(self):
+        self.sn = springnote.Springnote()
+
     @unittest.test
     def should_have_consumer_token(self):
-        oauth_req = springnote.Springnote().oauth_request("GET", "http://url.com/data.json")
-        consumer_key = springnote.Springnote.consumer_token.key
+        oauth_req = self.sn.oauth_request("GET", "http://url.com/data.json")
+        consumer_key = self.sn.consumer_token.key
         assert_that(oauth_req.parameters['oauth_consumer_key'], is_(consumer_key))
 
     @unittest.test
@@ -191,8 +194,8 @@ class OauthRequestTestCase(unittest.TestCase):
 
     @unittest.test
     def should_have_signature_method(self): 
-        oauth_req = springnote.Springnote().oauth_request("GET", "http://url.com/data.json")
-        consumer_key = springnote.Springnote.consumer_token.key
+        oauth_req = self.sn.oauth_request("GET", "http://url.com/data.json")
+        consumer_key = self.sn.consumer_token.key
         assert_that(oauth_req.parameters, has_key('oauth_signature_method'))
         assert_that(oauth_req.parameters, has_key('oauth_signature'))
 

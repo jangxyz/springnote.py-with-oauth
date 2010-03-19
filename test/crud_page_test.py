@@ -25,10 +25,10 @@ class CMock(Mock):
 def mock_springnote_class():
     global original_sn, original_sn_rsrc, original_page
     original_sn = springnote.Springnote
-    host = springnote.Springnote.HOST
+    host = springnote.HOST
     original_page = springnote.Page
     springnote.Springnote = CMock()         # mock class Springnote
-    springnote.Springnote.HOST = host
+    springnote.HOST = host
 
     # don't use SpringnoteResource._build_model_from_response
     original_sn_rsrc = springnote.SpringnoteResource
