@@ -9,14 +9,14 @@
 import test_env, unittest
 from hamcrest import *
 import datetime, sys
-from springnote import Springnote, Page
+from springnote import Springnote, Page, SpringnoteError
 
 global_verbose = None
 
-def starting(msg):
+def _starting(msg):
     print msg,
     sys.stdout.flush()
-printout=starting
+_printout=_starting
 
 def check_http_status(response, msg):
     import sys
@@ -27,7 +27,7 @@ def check_http_status(response, msg):
     else:
         print "\tOK"
 
-def okay():
+def _okay():
     print "\tOK"
 
 def parse_data(json_body, keyword):
@@ -35,6 +35,16 @@ def parse_data(json_body, keyword):
     if len(partial) < 2:
         return None
     return int(partial[1].split(",")[0].strip('\'": ')) 
+
+def should_raise(exception, callable):
+    try:
+        callable()
+        raise AssertionError, "did not raise exception %s" % exception
+    except exception:
+        pass # proper exception raised
+    except Exception, e:
+        error_msg = 'expected %s to be raised but instead got %s:"%s"' % (exception, type(e), e)
+        raise AssertionError, error_msg
 
 
 class IntegrationTestCase(unittest.TestCase):
@@ -59,13 +69,15 @@ class IntegrationTestCase(unittest.TestCase):
             14. delete attachment to the page                [DELETE attachment]
             15. delete page                                  [DELETE page]
         '''
-        global test_id
+        global test_id, global_tag
+
         test_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        global_tag = 'springnote_oauthpy_integartion_test'
         print 'start test at', test_id
 
         sn = Springnote()
         self._test_access_token(sn)
-        #self._test_basic_function_calls(sn)
+        self._test_basic_function_calls(sn)
         self._test_page_object_calls(sn)
 
         self.cleanup(sn)
@@ -80,7 +92,7 @@ class IntegrationTestCase(unittest.TestCase):
         raw_input("Press enter when complete. ")
         access_token = sn.auth.fetch_access_token(request_token, verbose=global_verbose)
         print "test GET access token..", 
-        okay()
+        _okay()
 
     def _test_basic_function_calls(self, sn):
         ''' calls each functions following the scenario, checking for response status 200 '''
@@ -107,7 +119,7 @@ class IntegrationTestCase(unittest.TestCase):
         #   create a page                                
         print "test POST page..",
         url  = 'http://api.springnote.com/pages.json'
-        body = '{"page": {"source": "integration test. if you happen to see this, erase it for me", "tags": "springnote_oauth.py_integartion_test", "title": "test - %s"}}' % test_id
+        body = '{"page": {"source": "integration test. if you happen to see this, erase it for me", "tags": "%s", "title": "test - %s"}}' % (global_tag, test_id)
         resp = sn.springnote_request("POST", url, body=body, verbose=global_verbose)
         check_http_status(resp, "error on POST page with body: %s" % body)
         page_id = int(resp.read().split("identifier", 2)[1].split(",")[0].strip('\'": ')) 
@@ -190,7 +202,7 @@ class IntegrationTestCase(unittest.TestCase):
 
         # DELETE page
         #   delete page                                  
-        starting("test DELETE page")
+        _starting("test DELETE page")
         url  = "http://api.springnote.com/pages/%d.json" % page_id
         resp = sn.springnote_request("DELETE", url, verbose=global_verbose)
         check_http_status(resp, "error on DELETE page")
@@ -198,9 +210,9 @@ class IntegrationTestCase(unittest.TestCase):
     def _test_page_object_calls(self, sn):
         token = sn.access_token
         # LIST page: get list of pages of default note            
-        starting("test GET pages..")
+        _starting("test Page.list()..")
         pages = Page(token).list()
-        printout("%d pages" % len(pages))
+        _printout("%d pages" % len(pages))
         
         # LIST page with options
         last_modified = sorted(pages, \
@@ -210,41 +222,48 @@ class IntegrationTestCase(unittest.TestCase):
             last_modified_attr = getattr(last_modified, attr)
             most_recent_attr   = getattr(most_recent, attr)
             assert_that(last_modified_attr, is_(equal_to(most_recent_attr)))
-        okay()
+        _okay()
 
         # GET page: get most recently modified page
-        starting("test GET page..")
+        _starting("test page.get() READ ..")
         page = Page(token, id=last_modified.id).get()
         assert_that(page.title, is_(equal_to(last_modified.title)))
-        okay()
+        _okay()
 
         # POST page: create a page
-        starting("test POST page..")
-        page = Page(token, title="POST test for %s" % test_id, source="hola!").save()
+        _starting("test page.save() CREATE ..")
+        page = Page(token, 
+            title  = "POST test for %s" % test_id, 
+            source = "hola!",
+            tags   = global_tag
+        ).save()
         new_pages = Page(token).list()
         assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
-        okay()
+        _okay()
 
         # PUT page: edit the page
-        starting("test PUT page..")
+        _starting("test page.save() PUT ..")
         page.source = "modified"
         page.save()
-        refetch = Page(token, id=page.id)
+        refetch = Page(token, id=page.id).get()
         assert_that(refetch.source, contains_string("modified"))
-        okay()
+        _okay()
 
         # DELETE page
         #   delete page                                  
-        starting("test DELETE page")
-
+        _starting("test page.delete() DELETE ..")
+        page.delete()
+        should_raise(SpringnoteError.Response, 
+            lambda: Page(token, id=page.id).get()
+        )
+        _okay()
         
 
     def cleanup(self, sn):
         # delete garbage pages
         print 'cleaning..',
-        tag = 'springnote_oauthpy_integartion_test'
-        params = {'tags': tag}
-        url  = 'http://api.springnote.com/pages.json?tags=%s' % tag
+        params = {'tags': global_tag}
+        url  = 'http://api.springnote.com/pages.json?tags=%s' % global_tag
         resp = sn.springnote_request("GET", url, params, verbose=global_verbose)
 
         body = resp.read()
