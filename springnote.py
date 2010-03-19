@@ -139,8 +139,6 @@ class Springnote:
             sign_token=(sign_token or self.access_token), verbose=verbose)
 
         # set headers
-        #if 'content-type' not in map(lambda x: x.lower(), headers.keys()):
-        #    headers['Content-Type'] = 'application/json'
         if headers is None:
             if method != "GET" and is_file_type(body):
                 headers = {'Content-Type': "multipart/form-data; boundary=%s" % Springnote.BOUNDARY}
@@ -303,9 +301,6 @@ class Springnote:
         if len(args) == 1 and \
             getattr(args[0], 'key', False) and getattr(args[0], 'secret', False):
                 return oauth.OAuthToken(args[0].key, args[0].secret)
-
-        #if args != (None):
-        #    print "I don't know what you want me to do with", args
         return
 
 
@@ -315,33 +310,15 @@ class Springnote:
         return self.access_token
 
     # --- Page sugar ---
-    def get_page(self, id, note=None, params={}, verbose=None):
+    def get_page(self, note=None, id=None, title=None, 
+            source=None, relation_is_part_of=None, tags=None, verbose=None):
         """ /pages/:page_id.json에 접근하여 page를 가져옵니다. """
-        return Page(self.access_token).get(id, note, params, verbose=verbose)
+        return Page(self.access_token, note, id, title, source, 
+            relation_is_part_of, tags).get(verbose)
 
-    def get_pages(self, note=None, params={}, verbose=None):
+    def get_pages(self, note=None, verbose=None, **kwarg):
         """ 전체 page의 리스트를 가져옵니다.  """
-        return Page(self.access_token).list(note, params, verbose=verbose)
-
-    def create_page(self, title=None, source=None, tags=None, relation_is_part_of=None, note=None, params={}, verbose=None):
-        """ /pages.json에 접근하여 새 page를 생성합니다. """
-        return Page(self.access_token, note=note,
-            title=title, source=source, tags=tags, 
-            relation_is_part_of=relation_is_part_of,
-        ).create(params, verbose=verbose)
-
-
-    def update_page(self, id, title=None, source=None, tags=None,  relation_is_part_of=None, note=None, params={}, verbose=None):
-        """ /pages/:page_id.json에 접근하여 기존 페이지를 수정합니다. """
-        if note:  params['domain'] = note
-        path = "/pages/%d.json" % id
-        date = {}
-        if title:  data['title' ] = title
-        if source: data['source'] = source
-
-        new_page = Page(self.access_token)
-        new_page = new_page.request(path, "PUT", params, data, verbose=verbose)
-        return new_page
+        return Page(self.access_token).list(note, verbose=verbose, **kwarg)
 
     # --- Comments sugar ---
     def get_comments(self, id, note=None, params={}, verbose=None):
@@ -481,7 +458,8 @@ class Page(SpringnoteResource):
             title=None, source=None, relation_is_part_of=None, tags=None, parent=None):
         """ can give writable_attribute arguments, so you can save easily later """
         SpringnoteResource.__init__(self, access_token)
-        self.note   = note
+        self.note     = note
+        self.resource = {}
         self.id     = id
         self.title  = title
         self.source = source
@@ -489,7 +467,7 @@ class Page(SpringnoteResource):
         self.tags   = tags
 
     def process_resource(self, resource_dict):
-        """ +tags를 배열로 변환한다. """
+        """ + tags를 배열로 변환한다. """
         SpringnoteResource.process_resource(self, resource_dict)
         if "tags" in resource_dict:
             self.tags = filter(None, self.tags.split(','))
@@ -508,34 +486,30 @@ class Page(SpringnoteResource):
             writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
         return writable_resource
 
-    #--
+    @staticmethod
+    def _set_path_params_static(**kwarg):
+        ''' format path and params, according to page id and note '''
+        if 'note' in kwarg: note = kwarg['note']
+        else:               note = None
+        if 'id'   in kwarg: id   = kwarg['id']
+        else:               id   = None
 
-    def get(self, verbose=None):
-        if self.id is None:
-            raise SpringnoteError.InvalidOption("need page id to perform get()")
-        path, params = self._set_path_params()
-        return self.request(path, "GET", params=params, verbose=verbose)
+        # update params
+        if id is None:  params = Page._update_params(kwarg)
+        else:           params = {}
+        if note:        params['domain'] = note
 
+        # update path
+        if id:      path  = "/pages/%d.json" % id
+        else:       path  = "/pages.json"
+        if params:  path += "?%s" % urllib.urlencode(params)
 
-    def save(self, verbose=None):
-        if self.id: method = "PUT"  # update existing page
-        else:       method = "POST" # create new page
-        path, params = self._set_path_params()
+        return (path, params)
 
-        data = {}
-        for attr in self.writable_attributes:
-            value = getattr(self, attr, False)
-            if value:
-                data[attr] = value
-    
-        self.request(path, method, params=params, data=data, verbose=verbose)
-        return self
-
-    def delete(self, verbose=None):
-        if self.id is None:
-            raise SpringnoteError.InvalidOption("need page id to perform delete()")
-        path, params = self._set_path_params()
-        return self.request(path, "DELETE", params=params, verbose=verbose)
+    def _set_path_params(self, **kwarg):
+        if 'note' not in kwarg: kwarg['note'] = self.note
+        if 'id'   not in kwarg: kwarg['id']   = self.id
+        return Page._set_path_params_static(**kwarg)
 
     @classmethod
     def _update_params(cls, kwarg):
@@ -579,43 +553,54 @@ class Page(SpringnoteResource):
                     raise SpringnoteError.InvalidOption(msg)
         return params
 
+    # -- 
+    def get(self, verbose=None):
+        """ fetch the page with current id. 
+        hence the page instance MUST have id attribute """
+        if self.id is None:
+            raise SpringnoteError.InvalidOption("need page id to perform get()")
+        path, params = self._set_path_params()
+        return self.request(path, "GET", params=params, verbose=verbose)
 
-    @staticmethod
-    def _set_path_params_static(**kwarg):
-        ''' format path and params, according to page id and note '''
-        if 'note' in kwarg: note = kwarg['note']
-        else:               note = None
-        if 'id'   in kwarg: id   = kwarg['id']
-        else:               id   = None
 
-        # update params
-        if id is None:  params = Page._update_params(kwarg)
-        else:           params = {}
-        if note:
-            params['domain'] = note
+    def save(self, verbose=None):
+        """ save the current page.
+        create a new page if there is no id, while update if given.
+        ungiven parameters are ignored, not removed """
 
-        # update path
-        if id:      path  = "/pages/%d.json" % id
-        else:       path  = "/pages.json"
-        if params:  path += "?%s" % urllib.urlencode(params)
+        if self.id: method = "PUT"  # update existing page
+        else:       method = "POST" # create new page
+        path, params = self._set_path_params()
 
-        return (path, params)
+        data = {}
+        for attr in self.writable_attributes:
+            value = getattr(self, attr, False)
+            if value:
+                data[attr] = value
+    
+        self.request(path, method, params=params, data=data, verbose=verbose)
+        return self
 
-    def _set_path_params(self, **kwarg):
-        ''' format path and params, according to page id and note '''
-        if 'note' not in kwarg: kwarg['note'] = self.note
-        if 'id'   not in kwarg: kwarg['id']   = self.id
+    def delete(self, verbose=None):
+        """ delete the page """
+        if self.id is None:
+            raise SpringnoteError.InvalidOption("need page id to perform delete()")
+        path, params = self._set_path_params()
+        return self.request(path, "DELETE", params=params, verbose=verbose)
 
-        return Page._set_path_params_static(**kwarg)
 
     @classmethod
     def list(cls, access_token, note=None, verbose=None, **kwarg):
+        ''' get list of pages, that matches the criterion 
+        
+        NOTE: not all attributes are loaded, only the following are:
+            [title, relation_is_part_of, uri, identifier, date_modified]
+        '''
         kwarg.update(id=None)
         if note: 
             kwarg.update(domain=note)
 
         path, params = Page._set_path_params_static(**kwarg) # ignores id
-        # XXX: this won't work for processing response!
         return cls(access_token).request(path, "GET", params, verbose=verbose)
         
     @classmethod
