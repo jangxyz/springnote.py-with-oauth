@@ -494,6 +494,35 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         for attr_name in self.sample_data['page']:
             assert_that(page, responds_to(attr_name))
 
+
+    @unittest.test
+    def json_data_in_converted_to_unicode(self):
+        ''' json data converts to unicode string 
+
+        converts stuffs like "\\u003C" to u"<", 
+        as well as preserving "p" as u"p"
+        '''
+        # "\u003Cp\u003ENone\u003C/p\u003E\n"
+        source   = self.sample_data["page"]["source"] 
+        resolved = u"<p>None</p>\n"
+
+        to_unicode = springnote.Page._to_unicode
+        assert_that(to_unicode(source), is_(resolved))
+
+    @unittest.test
+    def json_data_values_are_saved_as_instance_attributes(self):
+        ''' json data's value is stored in instance attributes,
+        except for 'tags' '''
+        page = springnote.Page(self.token)
+        page.request("/some/path")
+
+        to_unicode = springnote.Page._to_unicode
+        for attr_name, attr_value in self.sample_data['page'].iteritems():
+            if attr_name == 'tags': continue
+            if isinstance(attr_value, types.StringTypes):
+                instance_value = getattr(page, attr_name)
+                assert_that(instance_value, is_(to_unicode(attr_value)))
+
     @unittest.test
     def changes_multiple_json_data(self):
         ''' json list is changed to multiple page instances '''
@@ -509,6 +538,16 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         pages = springnote.Page.list(self.token)
         assert_that(pages, has_length(2))
         assert_that(pages[0], (instance_of(springnote.Page)))
+
+    @unittest.test
+    def other_page_methods_calls_request(self):
+        ''' get, save, delete calls method request '''
+        page = springnote.Page(self.token, id=123)
+
+        should_call_method(page, 'request', lambda: page.get())
+        should_call_method(page, 'request', lambda: page.save())
+        should_call_method(page, 'request', lambda: page.delete())
+
 
 if __name__ == '__main__':
     unittest.main()

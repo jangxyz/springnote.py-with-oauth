@@ -12,7 +12,7 @@ __version__ = 0.5
 
 import env 
 
-import oauth, sys, types
+import oauth, sys, types, re
 import simplejson as json
 import httplib, urllib, socket
 
@@ -304,8 +304,8 @@ class Springnote:
             getattr(args[0], 'key', False) and getattr(args[0], 'secret', False):
                 return oauth.OAuthToken(args[0].key, args[0].secret)
 
-        if args != (None):
-            print "I don't know what you want me to do with", args
+        #if args != (None):
+        #    print "I don't know what you want me to do with", args
         return
 
 
@@ -435,7 +435,9 @@ class SpringnoteResource:
 
     @staticmethod
     def _to_unicode(s):
-        return eval('u"""%s"""' % s)
+        #return eval('u"""%s"""' % s)
+        def repl(match): return unichr(int(match.group(1), 16))
+        return re.sub(r"\\u([0-9a-fA-F]{4})", repl, s)
 
     def process_resource(self, resource_dict):
         """ resource마다 따로 필요한 후처리 작업을 해줍니다. 
@@ -534,8 +536,8 @@ class Page(SpringnoteResource):
         path, params = self._set_path_params()
         return self.request(path, "DELETE", params=params, verbose=verbose)
 
-    @staticmethod
-    def _update_params(kwarg):
+    @classmethod
+    def _update_params(cls, kwarg):
         ''' update parameters, from dictionary '''
         import re
         _parameters_check = {
@@ -606,15 +608,18 @@ class Page(SpringnoteResource):
         return Page._set_path_params_static(**kwarg)
 
     @classmethod
-    def list(cls, access_token, verbose=None, **kwarg):
+    def list(cls, access_token, note=None, verbose=None, **kwarg):
         kwarg.update(id=None)
+        if note: 
+            kwarg.update(domain=note)
+
         path, params = Page._set_path_params_static(**kwarg) # ignores id
         # XXX: this won't work for processing response!
         return cls(access_token).request(path, "GET", params, verbose=verbose)
         
     @classmethod
-    def search(cls, access_token, query, verbose=None, **kwarg):
-        kwarg.update(id=None, q=query)
-        return cls.list(access_token, verbose=verbose, **kwarg)
+    def search(cls, access_token, query, note=None, verbose=None, **kwarg):
+        kwarg.update(q=query)
+        return cls.list(access_token, note=note, verbose=verbose, **kwarg)
 
 
