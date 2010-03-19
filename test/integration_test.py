@@ -87,10 +87,10 @@ class IntegrationTestCase(unittest.TestCase):
     def _test_access_token(self, sn):
         ''' GET access token
         get access key (user interaction needed) '''
-        request_token = sn.auth.fetch_request_token(verbose=global_verbose)
-        print "\ngo to this url and approve:", sn.auth.authorize_url()
+        request_token = sn.fetch_request_token(verbose=global_verbose)
+        print "\ngo to this url and approve:", sn.authorize_url(request_token)
         raw_input("Press enter when complete. ")
-        access_token = sn.auth.fetch_access_token(request_token, verbose=global_verbose)
+        access_token = sn.fetch_access_token(request_token, verbose=global_verbose)
         print "test GET access token..", 
         _okay()
 
@@ -211,13 +211,13 @@ class IntegrationTestCase(unittest.TestCase):
         token = sn.access_token
         # LIST page: get list of pages of default note            
         _starting("test Page.list()..")
-        pages = Page(token).list()
+        pages = Page.list(token)
         _printout("%d pages" % len(pages))
         
         # LIST page with options
         last_modified = sorted(pages, \
             cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
-        most_recent = Page(token).list(sort="date_modified", order="desc", count=1)[0]
+        most_recent = Page.list(token, sort="date_modified", order="desc", count=1)[0]
         for attr in ["identifier", "title", "source", "date_modified"]:
             last_modified_attr = getattr(last_modified, attr)
             most_recent_attr   = getattr(most_recent, attr)
@@ -237,7 +237,7 @@ class IntegrationTestCase(unittest.TestCase):
             source = "hola!",
             tags   = global_tag
         ).save()
-        new_pages = Page(token).list()
+        new_pages = Page.list(token)
         assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
         _okay()
 
