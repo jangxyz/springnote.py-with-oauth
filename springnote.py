@@ -282,9 +282,7 @@ class Springnote:
     def get_comments(self, id, note=None, params={}, verbose=None):
         raise NotImplementedError('you should implement it!')
 
-
-
-
+## -- OOP layer
 class SpringnoteResource:
     """ springnote에서 사용하는 리소스의 부모 클래스. 
         Page, Attachment 등이 이 클래스를 상속합니다 """
@@ -398,6 +396,7 @@ class Page(SpringnoteResource):
     """ 스프링노트의 page에 대한 정보를 가져오거나, 수정할 수 있습니다.
         page의 하위 리소스에 접근할 수 있도록 해줍니다. """
 
+    # name of attributes for this resource
     attributes = [
         "identifier",           # 페이지 고유 ID  예) 2
         "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
@@ -410,7 +409,18 @@ class Page(SpringnoteResource):
         "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
         "tags"                  # 페이지에 붙은 태그  예) tag1,tag2
     ]
+    # name of attributes used when save()
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
+    # arguments to check parameters
+    check_parameters = {
+        'sort'  : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
+        'order' : ['desc', 'asc'],
+        'offset': types.IntType,
+        'count' : types.IntType,
+        'q'     : types.StringTypes,
+        'tags'  : types.StringTypes,
+        'identifiers': re.compile("([0-9]+,)*[0-9]+"), 
+    }
 
     def __init__(self, access_token, note=None, id=None, 
             title=None, source=None, relation_is_part_of=None, tags=None, parent=None):
@@ -472,43 +482,31 @@ class Page(SpringnoteResource):
     @classmethod
     def _update_params(cls, kwarg):
         ''' update parameters, from dictionary '''
-        import re
-        _parameters_check = {
-            'sort'  : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
-            'order' : ['desc', 'asc'],
-            'offset': types.IntType,
-            'count' : types.IntType,
-            'q'     : types.StringTypes,
-            'tags'  : types.StringTypes,
-            'identifiers': re.compile("([0-9]+,)*[0-9]+"), 
-        }
         params = {}
         for key, value in kwarg.iteritems():
-            if key not in _parameters_check:
+            if key not in cls.check_parameters:
                 continue
-            check_method = _parameters_check[key]
-            # string in list
+
+            check_method = cls.check_parameters[key]
+            error_msg = "%s is not allowed for %s" % (value, key)
+            # list of strings
             if isinstance(check_method, types.ListType):
                 if value in check_method: params[key] = value
-                else:
-                    msg = "%s is not allowed for %s" % (value, key)
-                    raise SpringnoteError.InvalidOption(msg)
-            # is string types
+                else:   raise SpringnoteError.InvalidOption(error_msg)
+            # string (or unicode)
             elif check_method is types.StringTypes:
                 params[key] = unicode(value)
-            # is some type
+            # primitive type
             elif isinstance(check_method, types.TypeType):
                 try:
                     params[key] = check_method(value)
                 except ValueError:
-                    msg = "%s is not allowed for %s" % (value, key)
-                    raise SpringnoteError.InvalidOption(msg)
-            # is regex pattern
+                    raise SpringnoteError.InvalidOption(error_msg)
+            # regex
             elif isinstance(check_method, re._pattern_type):
                 if check_method.match(value): params[key] = value
                 else:
-                    msg = "%s is not allowed for %s" % (value, key)
-                    raise SpringnoteError.InvalidOption(msg)
+                    raise SpringnoteError.InvalidOption(error_msg)
         return params
 
     # -- 
