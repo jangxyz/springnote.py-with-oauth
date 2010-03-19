@@ -598,7 +598,7 @@ class Page(SpringnoteResource):
         '''
         kwarg.update(id=None)
         if note: 
-            kwarg.update(domain=note)
+            kwarg.update(note=note)
 
         path, params = Page._set_path_params_static(**kwarg) # ignores id
         return cls(access_token).request(path, "GET", params, verbose=verbose)
