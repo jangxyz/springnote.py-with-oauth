@@ -432,20 +432,20 @@ class PageRequestTestCase(unittest.TestCase):
         springnote.Page.search(self.auth, query=query)
 
 
-class BuildModelFromResponseTestCase(unittest.TestCase):
-    # from http://dev.springnote.com/pages/413747
-    sample_json = '''{"page": {
-        "rights": null,
-        "source": "\u003Cp\u003ENone\u003C/p\u003E\n",
-        "creator": "http://deepblue.myid.net/",
-        "date_created": "2007/10/26 05:30:08 +0000",
-        "contributor_modified": "http://deepblue.myid.net/",
-        "date_modified": "2008/01/08 10:55:36 +0000",
-        "relation_is_part_of": 1,
-        "identifier": 4,
-        "tags": "test",
-        "title": "TestPage"
-    }}'''
+class JsonTestCase(unittest.TestCase):
+    # from http://dev.springnote.com/pages/413747, escaped to match python
+    sample_json = '{"page": {' \
+        '"rights": null, ' \
+        '"source": "\\u003Cp\\u003ENone\\u003C/p\\u003E\\n", ' \
+        '"creator": "http://deepblue.myid.net/", ' \
+        '"date_created": "2007/10/26 05:30:08 +0000", ' \
+        '"contributor_modified": "http://deepblue.myid.net/", ' \
+        '"date_modified": "2008/01/08 10:55:36 +0000", ' \
+        '"relation_is_part_of": 1, ' \
+        '"identifier": 4, ' \
+        '"tags": "test", ' \
+        '"title": "TestPage" ' \
+    '}}'
     sample_data =  {"page": {
         "rights": None,
         "source": "\u003Cp\u003ENone\u003C/p\u003E\n",
@@ -458,6 +458,36 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         "tags": "test",
         "title": "TestPage"
     }}
+    def convert_string_to_unicode(self, data):
+        if isinstance(data, types.StringType):
+            return springnote.SpringnoteResource._to_unicode(data)
+        elif isinstance(data, types.ListType):
+            return map(unicode, data)
+        elif isinstance(data, types.DictType):
+            u_data = {}
+            for key, value in data.iteritems():
+                u_key   = self.convert_string_to_unicode(key)
+                u_value = self.convert_string_to_unicode(value)
+                u_data[u_key] = u_value
+            return u_data
+        else:
+            return data
+
+    def test_json_loads(self):
+        sample_json = self.convert_string_to_unicode(self.sample_json)
+        sample_data = self.convert_string_to_unicode(self.sample_data)
+        assert_that(springnote.json.loads(sample_json), is_(sample_data))
+
+    def test_json_dumps(self):
+        dumped = springnote.json.dumps(self.sample_data)
+        data = springnote.json.loads(dumped)
+        assert_that(data, is_(self.sample_data))
+
+
+class BuildModelFromResponseTestCase(unittest.TestCase):
+    sample_json = JsonTestCase.sample_json
+    sample_data = JsonTestCase.sample_data
+
     def setUp(self):
         self.o_Springnote = springnote.Springnote
         self.o_json       = springnote.json
@@ -480,23 +510,14 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         self.m_get_response.expects(at_least_once()).read() \
             .will(return_value(self.sample_json))
 
-        #self.auth = ('BOGUS', 'TOKEN')
         self.auth = Mock()
         self.auth.access_token = ('ACCESS', 'TOKEN')
         self.auth.consumer_token = ('CONSUMER', 'TOKEN')
-
-        # short conventions
-        #self.expects_springnote_request = \
-        #    springnote.Springnote.expects(once()).method('springnote_request') \
-        #    .will(return_value(self.m_get_response))
-        #self.response_expects = self.m_get_response.expects(once())
-
                             
     def tearDown(self):     
         # restore original
         springnote.Springnote = self.o_Springnote
         springnote.json       = self.o_json
-                            
                             
     @unittest.test          
     def should_load_json_after_request(self):

@@ -13,8 +13,23 @@ __version__ = 0.5
 import env 
 
 import oauth, sys, types, re
-import simplejson as json
 import httplib, urllib, socket
+
+''' try importing 'simplejson' first, since it's faster than json 
+if doesn't exist, try importing json (since python 2.6)
+if doesn't exist, print out a warning and import dummy json
+'''
+
+try:
+    import simplejson as json
+except ImportError:
+    try:
+        import json
+    except ImportError:
+        sys.stderr.write('[WARNING] no appropriate json library found.\n' \
+                        'consider installing simplejson or upgrade to python>=2.6 to use better json library.\n')
+        import dummyjson as json
+
 
 # default consumer token (as springnote python library)
 # you should change this if you want to build your own application
