@@ -255,7 +255,7 @@ class PageRequestTestCase(unittest.TestCase):
     @unittest.test
     def delete_method_without_id_is_invalid(self):
         """ page.delete() without id is invalid
-        
+
         Page(self.auth).delete() raises InvalidOption error """
         try:
             springnote.Page(self.auth).delete()
@@ -392,7 +392,7 @@ class PageRequestTestCase(unittest.TestCase):
             url    = string_contains(url_pattern)
         )
         springnote.Page.list(self.auth)
-        
+
     @unittest.test
     def list_method_calls_set_path_params_static(self):
         ''' Page.list() calls _set_path_params_static() '''
@@ -513,15 +513,15 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         self.auth = Mock()
         self.auth.access_token = ('ACCESS', 'TOKEN')
         self.auth.consumer_token = ('CONSUMER', 'TOKEN')
-                            
-    def tearDown(self):     
+
+    def tearDown(self):
         # restore original
         springnote.Springnote = self.o_Springnote
         springnote.json       = self.o_json
-                            
-    @unittest.test          
+
+    @unittest.test
     def should_load_json_after_request(self):
-        ''' calls json.load() after request() '''
+        ''' calls json.loads() after request() '''
         # mock
         springnote.json.expects(once()).method('loads') \
             .will(return_value(self.sample_data))       \
@@ -530,11 +530,21 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         # run
         springnote.Page(self.auth).request("/some/path")
 
+    @unittest.testonly
+    def should_dump_data_to_json_on_request(self):
+        ''' calls json.dumps() when request() if data is given '''
+        data = self.sample_data['page']
+
+        # mock
+        springnote.json.expects(once()).method('dumps') \
+            .will(return_value(self.sample_json))
+
+        springnote.Page(self.auth).request("/some/path", data=data)
 
     @unittest.test
     def resource_attribute_should_be_same_with_json_data(self):
         ''' json data is loaded in page.resource 
-        
+
          * json data: {'page': {'title':'something'}} 
          * .resource:          {'title':'something'}  '''
         page = springnote.Page(self.auth)

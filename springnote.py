@@ -15,20 +15,14 @@ import env
 import oauth, sys, types, re
 import httplib, urllib, socket
 
-''' try importing 'simplejson' first, since it's faster than json 
-if doesn't exist, try importing json (since python 2.6)
-if doesn't exist, print out a warning and import dummy json
-'''
-
+# json import order: simplejson -> json -> FAIL
 try:
     import simplejson as json
 except ImportError:
     try:
         import json
     except ImportError:
-        sys.stderr.write('[WARNING] no appropriate json library found.\n' \
-                        'consider installing simplejson or upgrade to python>=2.6 to use better json library.\n')
-        import dummyjson as json
+        sys.exit("cannot find json library. try installing simplejson")
 
 
 # default consumer token (as springnote python library)
@@ -327,6 +321,7 @@ class SpringnoteResource:
         if data: # set body if given (ex. {'page': ...})
             data = {self.__class__.__name__.lower(): data}
             data = json.dumps(data, ensure_ascii=False)
+            sys.stdout.flush()
             if type(data) == str: 
                 data = data.decode('utf-8')
             data = data.encode('utf-8')
