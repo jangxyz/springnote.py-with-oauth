@@ -1,5 +1,6 @@
-사용법
-======
+ 사용법
+========
+
 springnote_oauth.py는 [스프링노트 서비스](http://www.springnote.com/)를 이용하는 python library입니다.
 
 springnote 모듈을 import한 뒤,
@@ -19,8 +20,8 @@ springnote 모듈을 import한 뒤,
         all_pages = springnote.Page(sn).list()
 
 
-인증하기
---------
+## 인증하기
+
 OAuth 인증 방식을 이용합니다. 
 
 1. request token 얻기
@@ -41,8 +42,8 @@ OAuth 인증 방식을 이용합니다.
         print "인증 완료. 이거 기억해두세요:", sn.access_token
 
 
-리소스 요청하기
----------------
+## 리소스 요청하기
+
 Page 클래스를 이용하면 쉽게 가져올 수 있습니다.
 
 * 몽땅 보여줘!
@@ -78,8 +79,8 @@ Page 클래스를 이용하면 쉽게 가져올 수 있습니다.
         worthless_page = Page.list(sn, tags="썰렁유머")[0]
         worthless_page.delete()
 
-주의사항
-========
+ 주의사항
+==========
  - consumer token을 바꿔주세요.
     consumer token은 각 애플리케이션(consumer)이 스프링노트(service provider)에게 자기가 누구인지 알려주는 증명서입니다. 
     [API 센터](http://api.springnote.com/)에서 각자 애플리케이션을 등록하고 받은 consumer token을 넣어주세요.

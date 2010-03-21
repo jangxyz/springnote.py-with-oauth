@@ -12,8 +12,8 @@ __version__ = 0.5
 
 import env 
 
-import oauth, sys, types, re
-import httplib, urllib, socket
+import oauth, sys, types, re, __builtin__
+import httplib, urllib, socket, os.path
 
 # json import order: simplejson -> json -> FAIL
 try:
@@ -83,12 +83,12 @@ def is_verbose(is_verbose):
         return False
 
 def is_file_type(data):
-     ''' all you need is data.name and data.read() to act as a file '''
-     if not getattr(data, 'name', False):
-          return False
-     if getattr(data, 'read', False) and getattr(data.read, '__call__', False):
-          return True
-     return False
+    ''' needs data.name and data.read() to act as a file '''
+    if not getattr(data, 'name', False):
+        return False
+    if getattr(data, 'read', False) and getattr(data.read, '__call__', False):
+        return True
+    return False
 
 
 class Springnote:
@@ -151,12 +151,11 @@ class Springnote:
 
         # set headers
         if headers is None:
-            if method != "GET" and is_file_type(body):
-                headers = {'Content-Type': "multipart/form-data; boundary=%s" % Springnote.BOUNDARY}
-            elif '.json' in url: 
-                headers = {'Content-Type': 'application/json'}
-            else:
-                headers = {}
+            headers = {}
+        if method != "GET" and is_file_type(body):
+            headers['Content-Type'] = 'multipart/form-data; boundary=%s' % Springnote.BOUNDARY
+        elif '.json' in url: 
+            headers['Content-Type'] = 'application/json'
         headers.update(oauth_request.to_header())
 
         # set body
@@ -195,14 +194,14 @@ class Springnote:
 
 
     @staticmethod
-    def create_query_multipart_str(data, boundary=BOUNDARY):
+    def create_query_multipart_str(file, boundary=BOUNDARY):
         return "\r\n".join([
             '--%s' % boundary,
-            'Content-Disposition: form-data; name="Filedata"; filename="%s"' % data.name,
+            'Content-Disposition: form-data; name="Filedata"; filename="%s"' % file.name,
             'Content-Transfer-Encoding: binary',
             'Content-Type: application/octet-stream',
             '',
-            data.read(),
+            file.read(),
             '--%s--' % boundary,
         ])
 
@@ -300,10 +299,10 @@ class Springnote:
         raise NotImplementedError('you should implement it!')
 
 ## -- OOP layer
-class SpringnoteResource:
+class SpringnoteResource(object):
     """ springnote에서 사용하는 리소스의 부모 클래스. 
         Page, Attachment 등이 이 클래스를 상속합니다 """
-    attributes = [] # 각 리소스가 사용하는 attribute
+    springnote_attributes = [] # 각 리소스가 사용하는 attribute
 
     def __init__(self, auth, parent=None):
         self.auth     = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
@@ -312,19 +311,22 @@ class SpringnoteResource:
         self.raw      = ''      # request의 결과로 가져온 raw data
         return
 
-    def request(self, path, method="GET", params={}, data=None, verbose=None):
+    def request(self, path, method="GET", params={}, data=None, 
+                post_process=True, verbose=None):
         """ springnote에 request를 보내고, 받은 결과를 토대로 리소스를 생성합니다.
             SpringnoteResource를 상속 받는 모든 하위클래스에서 사용합니다. """
 
         url     = "http://%s/%s" % (HOST, path.lstrip('/'))
-        headers = {'Content-Type': 'application/json'}
+        #headers = {'Content-Type': 'application/json'}
+        headers = {}
         if data: # set body if given (ex. {'page': ...})
-            data = {self.__class__.__name__.lower(): data}
-            data = json.dumps(data, ensure_ascii=False)
-            sys.stdout.flush()
-            if type(data) == str: 
-                data = data.decode('utf-8')
-            data = data.encode('utf-8')
+            if not is_file_type(data):
+                data = {self.__class__.__name__.lower(): data}
+                data = json.dumps(data, ensure_ascii=False)
+                sys.stdout.flush()
+                if type(data) == str: 
+                    data = data.decode('utf-8')
+                data = data.encode('utf-8')
         use_https = False
 
         if is_verbose(verbose):
@@ -341,13 +343,19 @@ class SpringnoteResource:
         # send request
         response = Springnote(self.auth.access_token, self.auth.consumer_token) \
             .springnote_request(method=method, url=url, params=params, 
-                    headers=headers, body=data,
-                    secure=use_https, verbose = verbose
+                    headers = headers,   
+                    body    = data,
+                    secure  = use_https, 
+                    verbose = verbose
         )
         if not default_dry_run:
             if response.status != httplib.OK:
                 raise SpringnoteError.Response(response)
-            return self._build_model_from_response(response.read(), verbose=verbose)
+            self.raw = response.read()
+            if post_process:
+                return self._build_model_from_response(self.raw, verbose=verbose)
+            else:   
+                return self
 
 
     def _build_model_from_response(self, data, verbose=None): 
@@ -412,8 +420,7 @@ class Page(SpringnoteResource):
     """ 스프링노트의 page에 대한 정보를 가져오거나, 수정할 수 있습니다.
         page의 하위 리소스에 접근할 수 있도록 해줍니다. """
 
-    # name of attributes for this resource
-    attributes = [
+    springnote_attributes = [ 
         "identifier",           # 페이지 고유 ID  예) 2
         "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
         "date_modified",        # 페이지 최종 수정 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
@@ -441,15 +448,16 @@ class Page(SpringnoteResource):
     def __init__(self, auth, note=None, id=None, 
             title=None, source=None, relation_is_part_of=None, tags=None,
             parent=None):
-        """ can give writable_attribute arguments, so you can save easily later """
         SpringnoteResource.__init__(self, auth)
+        # 
         self.note     = note
         self.resource = {}
+        # springnote attributes
         self.id     = id
         self.title  = title
         self.source = source
-        self.relation_is_part_of = relation_is_part_of
         self.tags   = tags
+        self.relation_is_part_of = relation_is_part_of
 
     def process_resource(self, resource_dict):
         """ + tags를 배열로 변환한다. """
@@ -474,20 +482,25 @@ class Page(SpringnoteResource):
     @staticmethod
     def _set_path_params_static(**kwarg):
         ''' format path and params, according to page id and note '''
+        # update note and id
         if 'note' in kwarg: note = kwarg['note']
         else:               note = None
         if 'id'   in kwarg: id   = kwarg['id']
         else:               id   = None
 
-        # update params
-        if id is None:  params = Page._update_params(kwarg)
-        else:           params = {}
-        if note:        params['domain'] = note
+        # update path and parameters
+        if id:
+            path  = "/pages/%d.json" % id
+            params = {}
+        else:
+            path  = "/pages.json"
+            params = Page._update_params(kwarg)
+        if note: 
+            params['domain'] = note
 
-        # update path
-        if id:      path  = "/pages/%d.json" % id
-        else:       path  = "/pages.json"
-        if params:  path += "?%s" % urllib.urlencode(params)
+        # apply params to path
+        if params:  
+            path += "?%s" % urllib.urlencode(params)
 
         return (path, params)
 
@@ -498,7 +511,8 @@ class Page(SpringnoteResource):
 
     @classmethod
     def _update_params(cls, kwarg):
-        ''' update parameters, from dictionary '''
+        ''' update parameters from given dictionary 
+        only used in page listing. '''
         params = {}
         for key, value in kwarg.iteritems():
             if key not in cls.check_parameters:
@@ -580,4 +594,136 @@ class Page(SpringnoteResource):
     def search(cls, auth, query, note=None, verbose=None, **kwarg):
         kwarg.update(q=query)
         return cls.list(auth, note=note, verbose=verbose, **kwarg)
+
+
+class Attachment(SpringnoteResource):
+    springnote_attributes = [ 
+        "identifier",          # 첨부 고유 ID 예) 2
+        "title",               # 첨부 파일 이름 예) test.jpg
+        "description",         # 첨부 파일 크기(단위는 바이트) 예) 8000
+        "date_created",        # 첨부 최초 생성 일시(UTC) 예) 2008-01-30T10:11:16Z
+        "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
+    ]
+    def __init__(self, auth, parent, id=None, filename=None, file=None):
+        SpringnoteResource.__init__(self, auth, parent=parent)
+        self.id = id
+
+        # page attributes
+        self.parent              = parent 
+        self.relation_is_part_of = parent.id
+
+        # file attributes
+        self.title = filename
+        self.content, self.description, self.date_created = None, None, None
+        if file:        self.set_file(file)
+        if filename:    self.title = filename
+
+    def set_file(self, file):
+        ''' set title, content, description '''
+        self.title, self.content = file.name, file.read()
+        self.description         = len(self.content)
+    def get_file(self):
+        ''' return a fake file object with name and read() it '''
+        class File: 
+            def __init__(self, name, content):
+                self.name = name
+                self.read = lambda: content
+            def __eq__(self, object):
+                try:
+                    return self.name == object.name and \
+                        self.read() == object.read()
+                except:
+                    return False
+        if self.title and self.content:
+            return File(self.title, self.content)
+        return None
+    file = property(get_file, set_file)
+
+    @classmethod
+    def _set_path_params(cls, page, id=None, format=True):
+        path = "/pages/%d/attachments" % page.id
+        if id:      path += "/%d"  % id
+        if format:  path += ".json"
+
+        params = {}
+        if page.note:
+            params = {'domain': page.note}
+            path += "?domain=%s" % page.note
+
+        return path, params
+
+    def requires_value_for(self, *attribute_names):
+        ''' check value for given attribute names, raise InvalidOption if none.
+        recursive attribute names like 'parent.id' work '''
+        # format error message
+        error_msg = map(lambda x: "'%s'" % x, attribute_names)
+        error_msg = " and ".join(error_msg)
+        if len(attribute_names) == 2:
+            error_msg = "both " + error_msg
+        elif len(attribute_names) > 2: 
+            error_msg = "all " + error_msg
+        error_msg = "needs %s to perform the request" % error_msg
+        # check recursive names
+        for name in attribute_names:
+            value = self
+            for subname in name.split('.'):
+                value = getattr(value, subname, False)
+                if not value:
+                    error_msg = "missing %s. %s" % (name, error_msg)
+                    raise SpringnoteError.InvalidOption(error_msg)
+        else:
+            return True
+            
+    @classmethod
+    def list(cls, auth, page_id, note=None, verbose=None):
+        page = Page(auth, note=note, id=page_id)
+        path, params = Attachment._set_path_params(page)
+        return cls(auth, page).request(path, "GET", params, verbose=verbose)
+
+    def get(self, verbose=None):
+        """ reload the metadata of attachment, but not the file itself. 
+        requires id and parent.id """
+        self.requires_value_for('id', 'parent.id')
+        path, params = self._set_path_params(self.parent, self.id, format=True)
+        self.request(path, "GET", params, post_process=False, verbose=verbose)
+
+    def download(self, filename=None, filepath=None, overwrite=False, verbose=None):
+        """ fetch the attachment file. requires id and parent.id 
+        
+        if filename is given, it tries to save to the given path.
+        giving True to filename uses the same filename with self.title
+        however, if file already exists in that path, it does not save.
+        giving overwrite True fixes this behavior.
+        """
+        self.requires_value_for('id', 'parent.id')
+        path, params = self._set_path_params(self.parent, self.id, format=False)
+        self.request(path, "GET", params, post_process=False, verbose=verbose)
+        # own post process - tries to save file
+        self.content = self.raw
+        if filename is True:  filename = self.title
+        if filepath:          filename = os.path.join(filepath, filename)
+        if filename:
+            if overwrite or not os.path.exists(filename):
+                open(filename, 'w')
+
+        return self
+
+    def delete(self, verbose=None):
+        """ delete the attachment. requires id and parent.id """
+        self.requires_value_for('id', 'parent.id')
+        path, params = Attachment._set_path_params(self.parent, self.id)
+        return self.request(path, "DELETE", params=params, verbose=verbose)
+
+    def upload(self, verbose=None):
+        """ upload a file as attachment. requires file and parent.id
+
+        if id is given, it updates an existing file
+        and if not, creates a new file """
+        self.requires_value_for('parent.id', 'file')
+        if self.id:  method = "PUT"   # update existing attachment
+        else:        method = "POST"  # create new attachment
+
+        path, params = Attachment._set_path_params(self.parent, id=self.id)
+        return self.request(path, method, params=params, data=self.file, 
+                            verbose=verbose)
 

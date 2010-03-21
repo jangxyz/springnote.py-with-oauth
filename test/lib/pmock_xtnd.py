@@ -74,4 +74,14 @@ class StringNotContainsConstraint(StringContainsConstraint):
 def string_not_contains(expected):
     return StringNotContainsConstraint(expected)
 
+##
+##
 
+from pmock import LeastArgumentsMatcher, AllArgumentsMatcher
+def with_at_least(*arg_constraints, **kwarg_constraints):
+    """Specify the method's minimum required arguments."""
+    return LeastArgumentsMatcher(arg_constraints, kwarg_constraints)
+
+def with_(*arg_constraints, **kwarg_constraints):
+    """Fully specify the method's arguments."""
+    return AllArgumentsMatcher(arg_constraints, kwarg_constraints)

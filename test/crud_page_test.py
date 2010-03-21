@@ -3,6 +3,7 @@
     Test basic crud calls for Page Resource
 '''
 import test_env
+from test_env import *
 
 import unittest, re
 from pmock import *
@@ -16,65 +17,6 @@ import springnote
 def set_url(id, note=None, params={}):
     return "http://api.springnote.com/pages/%d.json" % id
 
-# callabla Mock
-class CMock(Mock):
-    def __init__(self, *arg, **kwarg): 
-        Mock.__init__(self, `(arg, kwarg)`)
-    def __call__(self, *arg, **kwarg): return self
-
-def mock_springnote_class():
-    global original_sn, original_sn_rsrc, original_page
-    original_sn = springnote.Springnote
-    host = springnote.HOST
-    original_page = springnote.Page
-    springnote.Springnote = CMock()         # mock class Springnote
-    springnote.HOST = host
-
-    # don't use SpringnoteResource._build_model_from_response
-    original_sn_rsrc = springnote.SpringnoteResource
-    def stub__build_model_from_response(self, *args, **kwargs):
-        #print 'stub __build_model_from_response:', self, args, kwargs
-        pass
-    springnote.SpringnoteResource._build_model_from_response = stub__build_model_from_response
-
-    return springnote.Springnote, springnote.SpringnoteResource
-
-def restore_springnote_class():
-    springnote.Springnote = original_sn
-    springnote.SpringnoteResource = original_sn_rsrc
-    springnote.Page = original_page
-    #springnote = original_module
-
-def should_call_method(object, method_name, callable, method_type=None):
-    class IsCalled(Exception): pass
-    def is_called(*args, **kwarg): raise IsCalled()
-    if method_type is not None: is_called = method_type(is_called)
-    # save
-    orig = getattr(object, method_name)
-    if method_type is not None: orig = method_type(orig)
-    # patch
-    setattr(object, method_name, is_called)
-
-    # run
-    try:
-        callable()
-        raise AssertionError, "method %s is not called" % method_name
-    except IsCalled:
-        # verify
-        pass 
-    finally:
-        # restore
-        setattr(object, method_name, orig)
-
-def should_raise(exception, callable):
-    try:
-        callable()
-        raise AssertionError, "did not raise exception %s" % exception
-    except exception:
-        pass # proper exception raised
-    except Exception, e:
-        error_msg = 'expected %s to be raised but instead got %s:"%s"' % (exception, type(e), e)
-        raise AssertionError, error_msg
 
 class PageRequestAndSpringnoteRequestTestCase(unittest.TestCase):
 
@@ -110,7 +52,9 @@ class PageRequestTestCase(unittest.TestCase):
     ''' set of tests about requests in Page resource '''
     def setUp(self):
         self.springnote = springnote.Springnote()
-        mock_springnote_class()
+        mock_class_Springnote()
+        mock_class_SpringnoteResource()
+        mock_class_Page()
         self.sn = springnote.Springnote
         self.m_get_response = Mock()
 
@@ -128,7 +72,9 @@ class PageRequestTestCase(unittest.TestCase):
         self.auth.consumer_token = ('CONSUMER', 'TOKEN')
 
     def tearDown(self):
-        restore_springnote_class()
+        restore_class_Springnote()
+        restore_class_SpringnoteResource()
+        restore_class_Page()
 
     def get_page_calls_springnote_request(self):
         """ GET """

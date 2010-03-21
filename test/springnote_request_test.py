@@ -17,25 +17,27 @@ from hamcrest_xtnd import *
 
 import springnote
 
-def mock_httplib_module():
+def mock_module_httplib():
     global original_httplib
     original_httplib = springnote.httplib
     springnote.httplib = Mock() # mock httplib
 
-def restore_httplib_module():
+def restore_module_httplib():
     springnote.httplib = original_httplib
 
 class HttpParamsTestCase(unittest.TestCase):
-    @unittest.setup
-    def mock_httplib(self):
-        mock_httplib_module()
-        self.conn    = Mock() # mock connection instance
+    def setUp(self):
+        mock_module_httplib()
+        self.conn     = Mock() # mock connection
+        self.file_obj = Mock() # mock file object
+        self.file_obj.name = "testfile.txt"
+        self.file_obj.read = lambda: "FILE CONTENT"
+
         self.httplib = springnote.httplib
         self.sn = springnote.Springnote()
 
-    @unittest.teardown
-    def restore_httplib(self):
-        restore_httplib_module()
+    def tearDown(self):
+        restore_module_httplib()
 
     @unittest.test
     def http_connection_should_be_requested_and_responsed(self):
@@ -121,32 +123,22 @@ class HttpParamsTestCase(unittest.TestCase):
                 '*** This is where the content of file is. ***\r\n' \
                 '--AaB03x--\r\n'
         """
-        data = Mock()
-        data.name = "test_file.txt"
-        data_content = "** TEST FILE **"
-        data.expects(once()).read().will(return_value(data_content))
-
         # mock
         self.httplib.expects(once()).method("HTTPConnection").will(return_value(self.conn))
         self.conn.expects(once()).getresponse()
         self.conn.expects(once()).method("request") \
             .with_at_least(body=string_contains('Content-Disposition: form-data;')) \
             .with_at_least(body=string_contains('name="Filedata"')) \
-            .with_at_least(body=string_contains('filename="%s"' % data.name)) \
-            .with_at_least(body=string_contains(data_content))
+            .with_at_least(body=string_contains('filename="%s"' % self.file_obj.name)) \
+            .with_at_least(body=string_contains(self.file_obj.read()))
 
         #
-        self.sn.springnote_request("POST", "http://url.com/data", body=data)
+        self.sn.springnote_request("POST", "http://url.com/data", body=self.file_obj)
         
     @unittest.test
     def content_type_should_not_be_json_when_posting_file(self):
         ''' when given POST and file object as data, even if url finishes with
         .json, header should not have {'Content-Type': 'application/json'} '''
-        data = Mock()
-        data.name = "test_file.txt"
-        data_content = "** TEST FILE **"
-        data.expects(once()).read().will(return_value(data_content))
-
         # mock
         self.httplib.expects(once()).method("HTTPConnection").will(return_value(self.conn))
         self.conn.expects(once()).getresponse()
@@ -154,17 +146,13 @@ class HttpParamsTestCase(unittest.TestCase):
             .with_at_least(headers=not_contains_value("application/json"))
 
         #
-        self.sn.springnote_request("POST", "http://url.com/upload.json", body=data)
+        self.sn.springnote_request("POST", "http://url.com/upload.json", 
+                                    body=self.file_obj)
 
     @unittest.test
     def content_type_should_not_be_json_when_putting_file(self):
         ''' when given PUT and file object as data, even if url finishes with
         .json, header should not have {'Content-Type': 'application/json'} '''
-        data = Mock()
-        data.name = "test_file.txt"
-        data_content = "** TEST FILE **"
-        data.expects(once()).read().will(return_value(data_content))
-
         # mock
         self.httplib.expects(once()).method("HTTPConnection").will(return_value(self.conn))
         self.conn.expects(once()).getresponse()
@@ -172,8 +160,7 @@ class HttpParamsTestCase(unittest.TestCase):
             .with_at_least(headers=not_contains_value("application/json"))
 
         #
-        self.sn.springnote_request("PUT", "http://url.com/edit.json", body=data)
-
+        self.sn.springnote_request("PUT", "http://url.com/edit.json", body=self.file_obj)
 
 class OauthRequestTestCase(unittest.TestCase):
     def setUp(self):
@@ -237,7 +224,7 @@ class OauthRequestTestCase(unittest.TestCase):
         includes_valid_oauth_param = OAuthParamConstraint
 
         # mock
-        mock_httplib_module() # springnote.httplib
+        mock_module_httplib() # springnote.httplib
         conn = Mock()
         springnote.httplib.expects(once()).method("HTTPConnection") \
             .will(return_value(conn))
@@ -249,7 +236,7 @@ class OauthRequestTestCase(unittest.TestCase):
         springnote.Springnote().springnote_request("GET", "http://url.com/data.json", secure=False)
 
         # restore 
-        restore_httplib_module()
+        restore_module_httplib()
 
 
 if __name__ == '__main__':

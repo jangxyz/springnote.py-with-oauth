@@ -27,10 +27,10 @@
 """
 
 import sys, pprint
-from springnote import Springnote
+from springnote import Springnote, Page
 
 def usage(verbose=False):
-    print "%s is a simple program to see how library works." % sys.argv[0]
+    print "%s is a simple program to see how the library works." % sys.argv[0]
     print
     print "  Usage:", sys.argv[0], '[options]', 'method', 'page [page_id [resource [resource_id]]]'
     print
@@ -104,15 +104,15 @@ def parse(argv):
 def auth(sn, verbose):
     print 'going through authorization...'
     # 1. receive a request token
-    request_token = sn.auth.fetch_request_token(verbose=verbose)
+    request_token = sn.fetch_request_token(verbose=verbose)
     print 'request token received:', (request_token.key, request_token.secret)
 
     # 2. user approves the request token
-    print 'go to this url and approve:', sn.auth.authorize_url()
+    print 'go to this url and approve:', sn.authorize_url(request_token)
     raw_input('Press enter when complete. ')
 
     # 3. receive access token -> saved inside sn
-    access_token = sn.auth.fetch_access_token(request_token, verbose=verbose)
+    access_token = sn.fetch_access_token(request_token, verbose=verbose)
     return sn
 
 
@@ -138,20 +138,29 @@ def main():
         sn.set_access_token(*access_token)
 
     ## Request resource
-    if method == 'GET':
-        if resource is None:
+    if resource is None:
+        if method == 'GET':
             if page_id: # GET page 123
-                page = sn.get_page(page_id, verbose=verbose)
+                page = Page(sn, id=page_id).get(verbose=verbose)
                 pprint.pprint(page.resource)
                 print "got page '%s'(#%d), last updated at %s" % (page.title, page.identifier, page.date_modified)
             else:       # GET pages
-                pages = sn.get_pages(verbose=verbose)
+                pages = Page.list(sn, verbose=verbose)
                 first_p = filter(lambda x: x.relation_is_part_of is None, pages)[0]
                 last_p  = max(pages, key=lambda x: x.date_modified)
                 print "got", len(pages), 'pages,',
                 print "from '%s'(#%d) to '%s'(#%d)" % (first_p.title, first_p.identifier, last_p.title, last_p.identifier)
                 print "what did you expect? :p"
-            return
+        elif method == "DELETE":
+            sys.exit("c'mon now, this is just a tutorial program. you don't want me to really remove your pages, do you? :p")
+        elif method == "POST":
+            title, source = argv[:2]
+            Page(
+        elif method == "PUT":
+            if not page_id:
+                sys.exit("I need to know which page you want to edit.")
+
+        return
 
     # other resources
     if resource_id:  path = '/%s/%d.json' % (resource, resource_id)
