@@ -192,14 +192,31 @@ class AbstractArgumentsMatcher(object):
 
     def _matches_args(self, invocation):
         for i, constraint in enumerate(self._arg_constraints):
-            if not constraint.eval(invocation.args[i]):
-                return False
+            # try testing hamcrest.Matcher (method _matches)
+            if getattr(constraint, 'eval', False):
+                if not constraint.eval(invocation.args[i]):
+                    return False
+            elif getattr(constraint, 'matches', False):
+                if not constraint.matches(invocation.args[i]):
+                    return False
+            else:
+                raise Exception("don't know what to do with invocation")
         return True
 
     def _matches_kwargs(self, invocation):
         for kw, constraint in self._kwarg_constraints.iteritems():
-            if (not invocation.kwargs.has_key(kw) or
-                not constraint.eval(invocation.kwargs[kw])):
+            #if (not invocation.kwargs.has_key(kw) or
+            #    not constraint.eval(invocation.kwargs[kw])):
+            #    return False
+            if not invocation.kwargs.has_key(kw):
+                return False
+            if getattr(constraint, 'eval', False):
+                if not constraint.eval(invocation.kwargs[kw]):
+                    return False
+            elif getattr(constraint, 'matches', False):
+                if not constraint.matches(invocation.kwargs[kw]):
+                    return False
+            else: # neither has 'eval' nor 'matches'
                 return False
         return True
 
