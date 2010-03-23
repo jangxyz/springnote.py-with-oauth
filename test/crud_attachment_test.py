@@ -76,22 +76,21 @@ class AttachmentResourceTestCase(unittest.TestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        springnote.Attachment.list(self.auth, self.page.id)
+        springnote.Attachment.list(self.auth, self.page)
 
     @unittest.test
     def class_method_list_with_note_calls_proper_path_and_params(self):
         ''' list(123, 'jangxyz') calls GET ".../pages/123/attachments..domain=jangxyz" '''
-        note = 'jangxyz'
-        page_id = self.page.id
+        self.page.note = 'jangxyz'
         # mock
-        url_pattern = "/pages/%d/attachments[.].*domain=%s" % (page_id, note)
+        url_pattern = "/pages/%d/attachments[.].*domain=%s" % (self.page.id, self.page.note)
         url_pattern = re.compile(url_pattern)
         self.expects_springnote_request.with_at_least(
             method = eq("GET"), 
             url    = string_contains(url_pattern)
         )
         # run
-        springnote.Attachment.list(self.auth, page_id, note=note)
+        springnote.Attachment.list(self.auth, page)
 
     @unittest.test
     def get_calls_proper_path_and_params(self):

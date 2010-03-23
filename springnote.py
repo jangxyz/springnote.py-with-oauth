@@ -606,17 +606,13 @@ class Attachment(SpringnoteResource):
     ]
     def __init__(self, auth, parent, id=None, filename=None, file=None):
         SpringnoteResource.__init__(self, auth, parent=parent)
-        self.id = id
-
-        # page attributes
-        self.parent              = parent 
-        self.relation_is_part_of = parent.id
+        self.id, self.relation_is_part_of = id, parent.id
 
         # file attributes
         self.title = filename
         self.content, self.description, self.date_created = None, None, None
-        if file:        self.set_file(file)
-        if filename:    self.title = filename
+        if file:     self.set_file(file)
+        if filename: self.title = filename
 
     def set_file(self, file):
         ''' set title, content, description '''
@@ -675,8 +671,7 @@ class Attachment(SpringnoteResource):
             return True
             
     @classmethod
-    def list(cls, auth, page_id, note=None, verbose=None):
-        page = Page(auth, note=note, id=page_id)
+    def list(cls, auth, page, verbose=None):
         path, params = Attachment._set_path_params(page)
         return cls(auth, page).request(path, "GET", params, verbose=verbose)
 
@@ -726,4 +721,35 @@ class Attachment(SpringnoteResource):
         path, params = Attachment._set_path_params(self.parent, id=self.id)
         return self.request(path, method, params=params, data=self.file, 
                             verbose=verbose)
+
+
+class Comment(SpringnoteResource):
+    springnote_attributes = [ 
+        "identifier",          # 고유 ID 예) 1
+        "date_created",        # 최초 생성 일시(UTC)예) 2008-01-30T10:11:16Z
+        "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
+        "creator",             # 작성자 nickname
+        "source",              # 내용.
+    ]
+    def __init__(self, auth, parent, id=None, filename=None, file=None):
+        SpringnoteResource.__init__(self, auth, parent=parent)
+        self.id, relation_is_part_of = id, parent.id
+
+    @classmethod
+    def list(cls, auth, page, verbose=None):
+        path, params = Comment._set_path_params(page)
+        return cls(auth, page).request(path, "GET", params, verbose=verbose)
+
+    @classmethod
+    def _set_path_params(cls, page, id=None, format=True):
+        path = "/pages/%d/comments" % page.id
+        if id:      path += "/%d"  % id
+        if format:  path += ".json"
+
+        params = {}
+        if page.note:
+            params = {'domain': page.note}
+            path += "?domain=%s" % page.note
+
+        return path, params
 
