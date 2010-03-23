@@ -90,7 +90,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        springnote.Attachment.list(self.auth, page)
+        springnote.Attachment.list(self.auth, self.page)
 
     @unittest.test
     def get_calls_proper_path_and_params(self):
@@ -109,6 +109,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
         ''' get() reloads metadata but not the content '''
         self.attach.get()
         assert_that(self.attach.file, is_(None))
+        assert_that(self.attach.title, is_not(None))
 
     @unittest.test
     def delete_calls_proper_path_and_params(self):

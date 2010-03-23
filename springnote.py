@@ -389,7 +389,7 @@ class SpringnoteResource(object):
             self.process_resource(self.resource)
             return self
         else:
-            raise ParseError('unable to parse as predefined model: ' + data)
+            raise SpringnoteError.ParseError('unable to parse as predefined model: ' + data)
 
     @staticmethod
     def _to_unicode(s):
@@ -414,6 +414,42 @@ class SpringnoteResource(object):
             setattr(self, "id", resource_dict["identifier"])
         self.resource = resource_dict
         return resource_dict
+
+    def requires_value_for(self, *attribute_names):
+        ''' check value for given attribute names, raise InvalidOption if none.
+        recursive attribute names like 'parent.id' work '''
+        # format error message
+        error_msg = map(lambda x: "'%s'" % x, attribute_names)
+        error_msg = " and ".join(error_msg)
+        if len(attribute_names) == 2:
+            error_msg = "both " + error_msg
+        elif len(attribute_names) > 2: 
+            error_msg = "all " + error_msg
+        error_msg = "needs %s to perform the request" % error_msg
+        # check recursive names
+        for name in attribute_names:
+            value = self
+            for subname in name.split('.'):
+                value = getattr(value, subname, False)
+                if not value:
+                    error_msg = "missing %s. %s" % (name, error_msg)
+                    raise SpringnoteError.InvalidOption(error_msg)
+        else:
+            return True
+
+    @classmethod
+    def _set_path_params(cls, page, id=None, format=True, plural=True):
+        path = "/pages/%d/%s" % (page.id, cls.__name__.lower())
+        if plural:  path += 's'
+        if id:      path += "/%d"  % id
+        if format:  path += ".json"
+
+        params = {}
+        if page.note:
+            params = {'domain': page.note}
+            path  += "?domain=%s" % page.note
+
+        return path, params
 
 
 class Page(SpringnoteResource):
@@ -647,28 +683,6 @@ class Attachment(SpringnoteResource):
             path += "?domain=%s" % page.note
 
         return path, params
-
-    def requires_value_for(self, *attribute_names):
-        ''' check value for given attribute names, raise InvalidOption if none.
-        recursive attribute names like 'parent.id' work '''
-        # format error message
-        error_msg = map(lambda x: "'%s'" % x, attribute_names)
-        error_msg = " and ".join(error_msg)
-        if len(attribute_names) == 2:
-            error_msg = "both " + error_msg
-        elif len(attribute_names) > 2: 
-            error_msg = "all " + error_msg
-        error_msg = "needs %s to perform the request" % error_msg
-        # check recursive names
-        for name in attribute_names:
-            value = self
-            for subname in name.split('.'):
-                value = getattr(value, subname, False)
-                if not value:
-                    error_msg = "missing %s. %s" % (name, error_msg)
-                    raise SpringnoteError.InvalidOption(error_msg)
-        else:
-            return True
             
     @classmethod
     def list(cls, auth, page, verbose=None):
@@ -680,7 +694,7 @@ class Attachment(SpringnoteResource):
         requires id and parent.id """
         self.requires_value_for('id', 'parent.id')
         path, params = self._set_path_params(self.parent, self.id, format=True)
-        self.request(path, "GET", params, post_process=False, verbose=verbose)
+        self.request(path, "GET", params, verbose=verbose)
 
     def download(self, filename=None, filepath=None, overwrite=False, verbose=None):
         """ fetch the attachment file. requires id and parent.id 
@@ -731,25 +745,85 @@ class Comment(SpringnoteResource):
         "creator",             # 작성자 nickname
         "source",              # 내용.
     ]
-    def __init__(self, auth, parent, id=None, filename=None, file=None):
-        SpringnoteResource.__init__(self, auth, parent=parent)
-        self.id, relation_is_part_of = id, parent.id
 
     @classmethod
     def list(cls, auth, page, verbose=None):
-        path, params = Comment._set_path_params(page)
+        path, params = cls._set_path_params(page)
         return cls(auth, page).request(path, "GET", params, verbose=verbose)
 
+
+class Collaboration(SpringnoteResource):
+    springnote_attributes = [ 
+        "rights_holder", # 협업자의 OpenID
+        "access_rights", # 협업자가 가진 권한 예) reader, writer, guest, creator
+        "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
+    ]
+
     @classmethod
-    def _set_path_params(cls, page, id=None, format=True):
-        path = "/pages/%d/comments" % page.id
-        if id:      path += "/%d"  % id
-        if format:  path += ".json"
+    def list(cls, auth, page, verbose=None):
+        path, params = cls._set_path_params(page, plural=False)
+        return cls(auth, page).request(path, "GET", params, verbose=verbose)
 
-        params = {}
-        if page.note:
-            params = {'domain': page.note}
-            path += "?domain=%s" % page.note
 
-        return path, params
+class Lock(SpringnoteResource):
+    springnote_attributes = [ 
+        "creator",             # 현재 페이지를 수정중인 사용자 OpenID
+        "date_expired",        # 잠금이 해제되는 (예상) 시간(UTC) 예) 2008-01-30T10:11:16Z
+        "relation_is_part_of", # 잠금 리소스가 속한 페이지의 ID
+    ]
+    def __init__(self, auth, parent):
+        SpringnoteResource.__init__(self, auth, parent=parent)
+        self.relation_is_part_of = parent.id
+
+    def get(self, verbose=None):
+        """ fetch status of lock """
+        self.requires_value_for('parent.id')
+        path, params = self._set_path_params(self.parent, plural=False)
+        # XXX: json format of Lock does is not wrapped by 'lock'. springnote bug??
+        self.request(path, "GET", params, post_process=False, verbose=verbose)
+        # own post process 
+        self.raw = '{"lock": %s}' % self.raw
+        return self._build_model_from_response(self.raw, verbose=verbose)
+
+    def achieve(self, verbose=None):
+        """ try to achieve a lock (POST)"""
+        self.requires_value_for('parent.id')
+        path, params = self._set_path_params(self.parent, plural=False)
+        # XXX: json format of Lock does is not wrapped by 'lock'. springnote bug??
+        self.request(path, "POST", params, post_process=False, verbose=verbose)
+        # own post process 
+        self.raw = '{"lock": %s}' % self.raw
+        return self._build_model_from_response(self.raw, verbose=verbose)
+
+
+class Revision(SpringnoteResource):
+    # there is no 'date_modified', 'contributor_modified', 'rights', and 'tags'
+    springnote_attributes = [ 
+        "identifier",          # 히스토리 고유 ID
+        "title",               # 페이지 제목
+        "description",         # 히스토리에 대한 설명
+        "creator",             # 만든 사람 OpenID
+        "date_created",        # 생성된 시간(UTC) 예) 2008-01-30T10:11:16Z
+        "relation_is_part_of", # 히스토리가 속한 페이지의 ID
+        "source",              # 페이지 내용
+    ]
+    def __init__(self, auth, parent, id=None):
+        SpringnoteResource.__init__(self, auth, parent=parent)
+        self.id = id
+        self.relation_is_part_of = parent.id
+
+    @classmethod
+    def list(cls, auth, page, verbose=None):
+        ''' get list of page revisions
+        NOTE: not all attributes are loaded, only the following are:
+            [ date_created, identifier, description, creator ]
+        ''' 
+        path, params = cls._set_path_params(page)
+        return cls(auth, page).request(path, "GET", params, verbose=verbose)
+
+    def get(self, verbose=None):
+        self.requires_value_for('parent.id', 'id')
+        path, params = self._set_path_params(self.parent, id=self.id)
+        return self.request(path, "GET", params, verbose=verbose)
+
 
