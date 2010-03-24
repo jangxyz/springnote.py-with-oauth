@@ -34,12 +34,13 @@ def usage(verbose=False):
     print
     print "  Usage:", sys.argv[0], '[options]', 'method', 'page [page_id [resource [resource_id]]]'
     print
-    print " ex1)", sys.argv[0], '--verbose', 'get', 'page',   '         # see every pages of default note'
-    print " ex2)", sys.argv[0], 'get', 'page', 123, 'attachment', 456, '# download attachment 456 of page 123'
+    print ' ex1)', sys.argv[0], '--verbose', 'get', 'page',    '                  # see every pages of default note'
+    print ' ex2)', sys.argv[0], 'get', 'page', 123, 'attachment', 456,  '         # download attachment 456 of page 123'
+    print ' ex3)', sys.argv[0], 'post', 'page', 'test', '"the contents in it" ', '# a bit different format here'
     print
-    print " * options: --dry | --verbose | --access-token ACCESS_TOKEN:ACCESS_KEY"
-    print " * method: get | put | post | delete"
-    print " * resource: page | attachment | revision | comment | collaboration | lock"
+    print ' * options: --dry | --verbose | --access-token ACCESS_TOKEN:ACCESS_KEY'
+    print ' * method: get | put | post | delete'
+    print ' * resource: page | attachment | revision | comment | collaboration | lock'
     print 
     if verbose:
         print '''
@@ -54,6 +55,9 @@ def usage(verbose=False):
     | Lock           |  -   |  o  |  o   |  -  |   -    |
     +----------------+------+-----+------+-----+--------+
         '''
+
+def _w(s):
+    return s.split()
 
 def parse(argv):
     verbose = False
@@ -81,23 +85,31 @@ def parse(argv):
     method        = argv[0].upper()                 # GET
     page_rsrc     = argv[1].rstrip('s').lower()     # page(s)
     page_id, resource, resource_id = None, None, None
-    if len(argv) >= 3:
-        page_id = int(argv[2])                      # 123
+    if len(argv) >= 3: page_id = argv[2]            # 123
 
-    # resource other than page
-    if len(argv) >= 4:
-        resource = argv[3].rstrip('s').lower()      # attachment
-    if len(argv) >= 5:                  
-        resource_id = int(argv[4])                  # 456
-
-    if method not in "GET PUT POST DELETE".split():
+    if method not in _w("GET PUT POST DELETE"):
         sys.exit("ERROR: don't know method %s" % method)
-    if resource and resource not in "page attachment revision comment collaboration lock".split():
-        sys.exit("ERROR: don't know resource %s" % resource)
+
+    if len(argv) >= 4: resource    = argv[3]  # attachment
+    if len(argv) >= 5: resource_id = argv[4]  # 456
+
+    other_resources = _w("attachment revision comment collaboration lock")
+    # must be pure PAGE, with other methods than GET
+    if resource not in other_resources:
+        # the only case where there is other resource than page_id
+        if method is not "POST":
+            page_id = int(page_id)
+        return access_token, method, page_id, None, None, verbose, argv
+    page_id = int(page_id)
+
+    # arguments used for resource other than page
+    if resource:    resource = resource.rstrip('s').lower()   # attachment
+    if resource_id: resource_id = int(resource_id)            # 456
 
     # mend resource name a bit
     if resource and resource not in 'lock collaboration'.split():
         resource += 's'
+
     return access_token, method, page_id, resource, resource_id, verbose, argv
 
 
@@ -124,7 +136,9 @@ def main():
     print method, 'page', page_id or '', resource or '', resource_id or ''
     sn = Springnote()
     ## Authorize
-    if access_token is None:
+    if access_token:
+        sn.set_access_token(*access_token)
+    else:
         # go through authorization process
         sn = auth(sn, verbose)
         access_token = sn.access_token
@@ -133,12 +147,9 @@ def main():
         print 'you can save it somewhere else and reuse it later like this:'
         print ' ', sys.argv[0], access_token_option, method, 'page', page_id or '', resource or '', resource_id or ''
         print
-    else:
-        # use given access token
-        sn.set_access_token(*access_token)
 
     ## Request resource
-    if resource is None:
+    if resource is None: # Page
         if method == 'GET':
             if page_id: ## GET page 123
                 page = Page(sn, id=page_id).get(verbose=verbose)
@@ -150,25 +161,29 @@ def main():
                 last_p  = max(pages, key=lambda x: x.date_modified)
                 print "got", len(pages), 'pages,',
                 print "from '%s'(#%d) to '%s'(#%d)" % (first_p.title, first_p.identifier, last_p.title, last_p.identifier)
-                print "what did you expect? :p"
+                print "not gonna show ALL the pages for ya"
         elif method == "DELETE":
             print "c'mon now, this is just a tutorial program. :p"
-        elif method == "POST": ## POST page
+        else:
             title, source = None, None
-            if len(argv) > 0:  title  = argv.pop(0)
-            if len(argv) > 0:  source = argv.pop(0)
-            if title or source:
-                page = Page(sn, title=title, source=source).save()
-                print "created page %d - '%s' at %s" % (page.id, page.title, page.date_created)
-        elif method == "PUT":  ## PUT page 123
-            if not page_id:
-                sys.exit("I need to know which page you want to edit.")
-            title, source = None, None
-            if len(argv) > 0:  title  = argv.pop(0)
-            if len(argv) > 0:  source = argv.pop(0)
-            if title or source:
-                page = Page(sn, id=page_id, title=title, source=source).save()
-                print "updated page %d - '%s' at %s" % (page.id, page.title, page.date_modified)
+            if method == "POST": ## POST page
+                if len(argv) >= 3:  title  = argv[2]
+                if len(argv) >= 4:  source = argv[3]
+                if title:
+                    page = Page(sn, title=title, source=source)
+                    page.save()
+                    print "created page '%s'(#%d) at %s" % (page.title, page.id, page.date_created)
+                    print "content:", page.source
+            elif method == "PUT":  ## PUT page 123
+                if len(argv) >= 4:  title  = argv[3]
+                if len(argv) >= 5:  source = argv[4]
+                if not page_id:
+                    sys.exit("I need to know which page you want to edit.")
+                if title:
+                    page = Page(sn, id=page_id, title=title, source=source)
+                    page.save()
+                    print "updated page '%s'(#%d) at %s" % (page.title, page.id, page.date_created)
+                    print "content:", page.source
         return
 
     # other resources
@@ -180,20 +195,19 @@ def main():
     url = 'http://api.springnote.com/pages/%d%s' % (page_id, path)
     print method, url
 
+    # status
     http_response = sn.springnote_request(method, url, verbose=verbose)
-    if http_response.status != 200:
-        print http_response.status
-        return http_response.status
+    # save downloaded file
+    is_downloading = resource == 'attachment' and method == "GET" and resource_id
+    if not is_downloading:
+        http_response.read()
     else:
-        # save downloaded file
-        if resource == 'attachment' and method == "GET" and resource_id:
-            f = open('download', 'wb')
-            f.write(http_response.read())
-            f.close()
-            print "saved file to 'download'"
-        else:
-            print http_response.read()
-            print http_response.status
+        f = open('download', 'wb')
+        f.write(http_response.read())
+        f.close()
+        print "saved file to 'download'"
+    print  http_response.status
+    return http_response.status
 
 if __name__ == '__main__':
     main()
