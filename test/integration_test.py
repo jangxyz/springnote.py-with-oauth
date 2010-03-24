@@ -1,15 +1,16 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 '''
     Try each feature
 
-        It needs user interaction first (to get access-key)
+        It needs user interaction some_rev (to get access-key)
 
 '''
 
 import test_env, unittest
 from hamcrest import *
 import datetime, sys
-from springnote import Springnote, Page, Attachment, SpringnoteError
+from springnote import Springnote, Page, Attachment, Comment, Collaboration, Revision, Lock, SpringnoteError
 
 global_verbose = None
 
@@ -61,7 +62,7 @@ class IntegrationTestCase(unittest.TestCase):
             5.  create a page                                [POST   page]
             6.  edit the page                                [PUT    page]
             7.  get revisions of the page                    [LIST   revision]
-            8.  get the first revision of the page           [GET    revision]
+            8.  get the some_rev revision of the page           [GET    revision]
             9.  get collaborations of the page               [LIST   collaboration]
             10. get attachments of the page                  [LIST   attachments]
             11. post attachment to the page                  [POST   attachment]
@@ -97,8 +98,7 @@ class IntegrationTestCase(unittest.TestCase):
 
     def _test_basic_function_calls(self, sn):
         ''' calls each functions following the scenario, checking for response status 200 '''
-        # LIST page
-        #   get list of pages of default note            
+        # LIST page - get list of pages of default note            
         _starting("test GET pages..")
         url  = "http://api.springnote.com/pages.json"
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
@@ -106,20 +106,17 @@ class IntegrationTestCase(unittest.TestCase):
 
         page_id = int(resp.read().split("identifier", 2)[1].split(",")[0].strip('\'": ')) 
 
-        # AUTH access token
-        #   this checks access token                     
+        # AUTH access token - this checks access token                     
         _starting("test using access token..")
         _okay()
 
-        # GET page
-        #   get most recently modified page              
+        # GET page - get most recently modified page              
         _starting("test GET page..")
         url  = 'http://api.springnote.com/pages/%d.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
         _check_http_status(resp, "error on GET page %d" % page_id)
 
-        # POST page
-        #   create a page                                
+        # POST page - create a page                                
         _starting("test POST page..")
         url  = 'http://api.springnote.com/pages.json'
         body = '{"page": {"source": "integration test. if you happen to see this, erase it for me", "tags": "%s", "title": "test - %s"}}' % (global_tag, test_id)
@@ -127,45 +124,39 @@ class IntegrationTestCase(unittest.TestCase):
         _check_http_status(resp, "error on POST page with body: %s" % body)
         page_id = int(resp.read().split("identifier", 2)[1].split(",")[0].strip('\'": ')) 
 
-        # PUT page
-        #   edit the page                                
+        # PUT page - edit the page                                
         _starting("test PUT page..")
         url  = 'http://api.springnote.com/pages/%d.json' % page_id
         body = '{"page": {"source": "edited"}}'
         resp = sn.springnote_request("PUT", url, body=body, verbose=global_verbose)
         _check_http_status(resp, "error on PUT page %d with body: %s" % (page_id, body))
 
-        # LIST revision
-        #   get revisions of the page                    
+        # LIST revision - get revisions of the page                    
         _starting("test LIST revisions..")
         url  = 'http://api.springnote.com/pages/%d/revisions.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
         _check_http_status(resp, "error on LIST revisions")
         revision_id = parse_data(resp.read(), "identifier")
 
-        # GET revision
-        #   get the first revision of the page           
+        # GET revision - get the some_rev revision of the page           
         _starting("test GET revisiosn..")
         url  = 'http://api.springnote.com/pages/%d/revisions/%d.json' % (page_id, revision_id)
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
         _check_http_status(resp, "error on GET revision")
 
-        # LIST collaboration
-        #   get collaborations of the page               
+        # LIST collaboration - get collaborations of the page               
         _starting("test LIST collaboration")
         url  = 'http://api.springnote.com/pages/%d/collaboration.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
         _check_http_status(resp, "error on LIST collaboration")
 
-        # LIST attachments
-        #   get attachments of the page                  
+        # LIST attachments - get attachments of the page                  
         _starting("test LIST attachments")
         url  = 'http://api.springnote.com/pages/%d/attachments.json' % page_id
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
         _check_http_status(resp, "error on LIST attachments")
 
-        # POST attachment
-        #   post attachment to the page                  
+        # POST attachment - post attachment to the page                  
         _starting("test POST attachment")
         url  = 'http://api.springnote.com/pages/%d/attachments.json' % page_id
         data = open(__file__, 'rb') # i shall sacrifice myself for testing!
@@ -174,37 +165,32 @@ class IntegrationTestCase(unittest.TestCase):
         _check_http_status(resp, "error on POST attachment")
         attachment_id = parse_data(resp.read(), "identifier")
 
-        # PUT attachment
-        #  put attachment to the page
+        # PUT attachment - put attachment to the page
         _starting("test PUT attachment")
         url  = 'http://api.springnote.com/pages/%d/attachments/%d.json' % (page_id, attachment_id)
         data = open(__file__, 'rb') 
         resp = sn.springnote_request("PUT", url, body=data, verbose=global_verbose)
         _check_http_status(resp, "error on PUT attachment")
 
-        # GET attachment
-        #   get information about attachment
+        # GET attachment - get information about attachment
         _starting("test GET attachment")
         url  = 'http://api.springnote.com/pages/%d/attachments/%d.json' % (page_id, attachment_id)
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
         _check_http_status(resp, "error on GET attachment")
 
-        # DOWNLOAD attachment
-        #   download attachment of the page              
+        # DOWNLOAD attachment - download attachment of the page              
         _starting("test DOWNLOAD attachment")
         url  = 'http://api.springnote.com/pages/%d/attachments/%d' % (page_id, attachment_id)
         resp = sn.springnote_request("GET", url, headers={}, verbose=global_verbose)
         _check_http_status(resp, "error on DOWNLOAD attachment")
 
-        # DELETE attachment
-        #   delete attachment to the page                
+        # DELETE attachment - delete attachment to the page                
         _starting("test DELETE attachment")
         url  = 'http://api.springnote.com/pages/%d/attachments/%d.json' % (page_id, attachment_id)
         resp = sn.springnote_request("DELETE", url, verbose=global_verbose)
         _check_http_status(resp, "error on DELETE attachment")
 
-        # DELETE page
-        #   delete page                                  
+        # DELETE page - delete page                                  
         _starting("test DELETE page")
         url  = "http://api.springnote.com/pages/%d.json" % page_id
         resp = sn.springnote_request("DELETE", url, verbose=global_verbose)
@@ -254,8 +240,12 @@ class IntegrationTestCase(unittest.TestCase):
         assert_that(refetch.source, contains_string("modified"))
         _okay()
 
-        # test Attachment
+        # test other resources
         self._test_attachment_object(auth, page)
+        self._test_comment_object(auth, page)
+        self._test_collaboration_object(auth, page)
+        self._test_lock_object(auth, page)
+        self._test_revision_object(auth, page)
 
         # DELETE page:   delete page                                  
         _starting("test page.delete() DELETE ..")
@@ -263,11 +253,13 @@ class IntegrationTestCase(unittest.TestCase):
         should_raise(SpringnoteError.Response, 
             lambda: Page(auth, id=page.id).get(verbose=global_verbose)
         )
+        _okay()
         
     def _test_attachment_object(self, auth, page):
         # LIST attachment - count 0
-        attaches = Attachment.list(auth, page.id, page.note, verbose=global_verbose)
+        attaches = Attachment.list(auth, page, verbose=global_verbose)
         assert_that(len(attaches), is_(0))
+
         # POST attachment
         _starting("test Attachment.upload() CREATE ..")
         data = open(__file__, 'rb') # i shall sacrifice myself for testing!
@@ -278,8 +270,7 @@ class IntegrationTestCase(unittest.TestCase):
         assert_that(attach.date_created, is_not(None))
         prev_attach_rsrc = attach.resource
         # LIST attachment - count 1
-        attaches = Attachment.list(auth, page.id, page.note, 
-                                    verbose=global_verbose)
+        attaches = Attachment.list(auth, page, verbose=global_verbose)
         assert_that(len(attaches), is_(1))
         assert_that(attaches[0].id, is_(attach.id))
         _okay()
@@ -302,11 +293,56 @@ class IntegrationTestCase(unittest.TestCase):
         _starting("test Attachment.delete() ..")
         attach.delete(verbose=global_verbose)
         # LIST attachment - count 0
-        attaches = Attachment.list(auth, page.id, page.note, 
-                                    verbose=global_verbose)
+        attaches = Attachment.list(auth, page, verbose=global_verbose)
         assert_that(len(attaches), is_(0))
         _okay()
         _starting("test Attachment.list() ..")
+        _okay()
+
+    def _test_comment_object(self, auth, page):
+        # LIST comment - count 0
+        _starting("test Comment.list() ..")
+        comments = Comment.list(auth, page, verbose=global_verbose)
+        assert_that(comments, has_length(0))
+        _okay()
+
+    def _test_collaboration_object(self, auth, page):
+        # LIST collaboration - count 0
+        _starting("test Collaboration.list() ..")
+        collabs = Collaboration.list(auth, page, verbose=global_verbose)
+        assert_that(collabs, has_length(0))
+        _okay()
+
+    def _test_lock_object(self, auth, page):
+        # GET lock 
+        _starting("test lock.get() ..")
+        lock = Lock(auth, page).get(verbose=global_verbose)
+        assert_that(lock.relation_is_part_of, is_(page.id))
+        _okay()
+
+        # POST lock - acquire lock. lock expire time udpated
+        _starting("test lock.acquire() ..")
+        new_lock = Lock(auth, page).acquire(verbose=global_verbose)
+        assert_that(new_lock.date_expired, is_not(lock.date_expired))
+        _okay()
+
+    def _test_revision_object(self, auth, page):
+        # LIST reivisions - count 4 (page create, update, attachment create, update)
+        _starting("test revision.list() ..")
+        revs = Revision.list(auth, page, verbose=global_verbose)
+        assert_that(revs, has_length(4))
+        first = min(revs, key=lambda x: x.date_created)
+        #assert_that(first.description, 
+        #                contains_string('이 페이지를 개설하였습니다'))
+        assert_that(first.relation_is_part_of, is_(page.id))
+        some_rev = filter(lambda r: r.description == '', revs)[0]
+        assert_that(some_rev.source, is_(None))
+        _okay()
+
+        # GET revision 
+        _starting("test revision.get() ..")
+        rev = Revision(auth, page, id=some_rev.id).get(verbose=global_verbose)
+        assert_that(rev.source, is_not(None))
         _okay()
 
 

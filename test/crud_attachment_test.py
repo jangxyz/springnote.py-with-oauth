@@ -189,124 +189,124 @@ class AttachmentResourceTestCase(unittest.TestCase):
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when = lambda: attach.upload())
 
-#class AttachmentDownloadTestCase(unittest.TestCase):
-#    def setUp(self):    
-#        springnote.Springnote = mock_class_Springnote()
-#
-#        # mock
-#        # file object mock
-#        file_content = 'FILE CONTENT'
-#        http_response = Mock()
-#        http_response.status = 200
-#        http_response.expects(once()).read() \
-#            .will(return_value(file_content))
-#        # springnote request mock
-#        self.expects_springnote_request = \
-#            springnote.Springnote.expects(once()).method('springnote_request') \
-#                .will(return_value(http_response))
-#
-#        #
-#        self.auth = Mock()
-#        self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
-#        self.page   = springnote.Page(self.auth, id=1)
-#        self.attach = springnote.Attachment(self.auth, self.page, id=123)
-#
-#    def tearDown(self): 
-#        springnote.Springnote = restore_class_Springnote()
-#
-#    @unittest.test
-#    def download_calls_proper_path_and_params(self):
-#        ''' download() calls GET ".../pages/1/attachments/123 without .json '''
-#        # mock
-#        url_pattern = re.compile(
-#            "/pages/%d/attachments/%d$" % (self.page.id, self.attach.id))
-#        self.expects_springnote_request.with_at_least(
-#            method=eq("GET"), url=string_contains(url_pattern))
-#        # run
-#        self.attach.download()
-#
-#    @unittest.test
-#    def download_saves_file_content_but_no_title(self):
-#        ''' download() saves response to content, but not metadata '''
-#        attach = springnote.Attachment(self.auth, self.page, id=123)
-#        attach.download()
-#        assert_that(attach.title,   is_(None))
-#        assert_that(attach.content, is_not(None))
-#
-#    @unittest.test
-#    def download_saves_file_to_local(self):
-#        ''' download(filename) saves to local filename '''
-#        filename = 'localfile.txt'
-#        run = lambda: self.attach.download(filename)
-#        should_call_method(springnote.__builtin__, 'open',
-#            when = run,
-#            arg  = with_(eq(filename), string_contains('w')))
-#
-#    @unittest.test
-#    def download_with_filename_true_saves_locally_with_same_filename(self):
-#        ''' download(filename=True) saves with same filename '''
-#        self.attach.title = "some_filename.txt"
-#        filename = True
-#        run = lambda: self.attach.download(filename)
-#        should_call_method(springnote.__builtin__, 'open',
-#            when = run,
-#            arg  = with_(eq(self.attach.title), string_contains('w')))
-#
-#    @unittest.test
-#    def download_with_path_and_filename_saves_in_that_position(self):
-#        ''' download() with path and filename saves to that path '''
-#        filename = "test_file.txt"
-#        path     = "/tmp"
-#        run = lambda: self.attach.download(filename, path)
-#        should_call_method(springnote.__builtin__, 'open',
-#            when = run,
-#            arg  = with_(eq(path +"/"+ filename), string_contains('w')))
-#            
-#    @unittest.test
-#    def download_should_not_save_file_if_file_does_not_exist(self):
-#        ''' download(filename) should not save locally if file already exist '''
-#        filename = 'localfile.txt'
-#        run      = lambda: self.attach.download(filename)
-#        # save & patch
-#        O_os_path_exists = springnote.os.path.exists
-#        springnote.os.path.exists = lambda x: True
-#        
-#        should_not_call_method(springnote.__builtin__, 'open',
-#            when = run,
-#            arg  = with_(eq(filename), string_contains('w')))
-#
-#        # recover
-#        springnote.os.path.exists = O_os_path_exists
-#
-#    @unittest.test
-#    def download_with_overwrite_should_save_file_even_if_file_does_not_exist(self):
-#        ''' download(filename, overwrite) should save locally even if file exists '''
-#        filename  = 'localfile.txt'
-#        run       = lambda: self.attach.download(filename, overwrite=True)
-#        # save & patch
-#        O_os_path_exists = springnote.os.path.exists
-#        springnote.os.path.exists = lambda x: True
-#        
-#        should_call_method(springnote.__builtin__, 'open',
-#            when = run,
-#            arg  = with_(eq(filename), string_contains('w')))
-#
-#        # recover
-#        springnote.os.path.exists = O_os_path_exists
-#
-#    @unittest.test
-#    def download_and_delete_methods_should_have_both_page_id_and_id(self):
-#        ''' download() raises InvalidOption if any of page id and id is not given '''
-#        # test page without id
-#        idless_page = springnote.Page(self.auth, None) 
-#        pageid_less_attach = springnote.Attachment(self.auth, idless_page, id=123)
-#        should_raise(springnote.SpringnoteError.InvalidOption, 
-#                    when=lambda: pageid_less_attach.download())
-#
-#        # test attachment without id
-#        id_less_attach = springnote.Attachment(self.auth, self.page, id=None)
-#        should_raise(springnote.SpringnoteError.InvalidOption, 
-#                    when=lambda: id_less_attach.download())
+class AttachmentDownloadTestCase(unittest.TestCase):
+    def setUp(self):    
+        springnote.Springnote = mock_class_Springnote()
+
+        # mock
+        # file object mock
+        file_content = 'FILE CONTENT'
+        http_response = Mock()
+        http_response.status = 200
+        http_response.expects(once()).read() \
+            .will(return_value(file_content))
+        # springnote request mock
+        self.expects_springnote_request = \
+            springnote.Springnote.expects(once()).method('springnote_request') \
+                .will(return_value(http_response))
+
+        #
+        self.auth = Mock()
+        self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
+        self.page   = springnote.Page(self.auth, id=1)
+        self.attach = springnote.Attachment(self.auth, self.page, id=123)
+
+    def tearDown(self): 
+        springnote.Springnote = restore_class_Springnote()
+
+    @unittest.test
+    def download_calls_proper_path_and_params(self):
+        ''' download() calls GET ".../pages/1/attachments/123 without .json '''
+        # mock
+        url_pattern = re.compile(
+            "/pages/%d/attachments/%d$" % (self.page.id, self.attach.id))
+        self.expects_springnote_request.with_at_least(
+            method=eq("GET"), url=string_contains(url_pattern))
+        # run
+        self.attach.download()
+
+    @unittest.test
+    def download_saves_file_content_but_no_title(self):
+        ''' download() saves response to content, but not metadata '''
+        attach = springnote.Attachment(self.auth, self.page, id=123)
+        attach.download()
+        assert_that(attach.title,   is_(None))
+        assert_that(attach.content, is_not(None))
+
+    @unittest.test
+    def download_saves_file_to_local(self):
+        ''' download(filename) saves to local filename '''
+        filename = 'localfile.txt'
+        run = lambda: self.attach.download(filename)
+        should_call_method(springnote.__builtin__, 'open',
+            when = run,
+            arg  = with_(eq(filename), string_contains('w')))
+
+    @unittest.test
+    def download_with_filename_true_saves_locally_with_same_filename(self):
+        ''' download(filename=True) saves with same filename '''
+        self.attach.title = "some_filename.txt"
+        filename = True
+        run = lambda: self.attach.download(filename)
+        should_call_method(springnote.__builtin__, 'open',
+            when = run,
+            arg  = with_(eq(self.attach.title), string_contains('w')))
+
+    @unittest.test
+    def download_with_path_and_filename_saves_in_that_position(self):
+        ''' download() with path and filename saves to that path '''
+        filename = "test_file.txt"
+        path     = "/tmp"
+        run = lambda: self.attach.download(filename, path)
+        should_call_method(springnote.__builtin__, 'open',
+            when = run,
+            arg  = with_(eq(path +"/"+ filename), string_contains('w')))
+            
+    @unittest.test
+    def download_should_not_save_file_if_file_does_not_exist(self):
+        ''' download(filename) should not save locally if file already exist '''
+        filename = 'localfile.txt'
+        run      = lambda: self.attach.download(filename)
+        # save & patch
+        O_os_path_exists = springnote.os.path.exists
+        springnote.os.path.exists = lambda x: True
+        
+        should_not_call_method(springnote.__builtin__, 'open',
+            when = run,
+            arg  = with_(eq(filename), string_contains('w')))
+
+        # recover
+        springnote.os.path.exists = O_os_path_exists
+
+    @unittest.test
+    def download_with_overwrite_should_save_file_even_if_file_does_not_exist(self):
+        ''' download(filename, overwrite) should save locally even if file exists '''
+        filename  = 'localfile.txt'
+        run       = lambda: self.attach.download(filename, overwrite=True)
+        # save & patch
+        O_os_path_exists = springnote.os.path.exists
+        springnote.os.path.exists = lambda x: True
+        
+        should_call_method(springnote.__builtin__, 'open',
+            when = run,
+            arg  = with_(eq(filename), string_contains('w')))
+
+        # recover
+        springnote.os.path.exists = O_os_path_exists
+
+    @unittest.test
+    def download_and_delete_methods_should_have_both_page_id_and_id(self):
+        ''' download() raises InvalidOption if any of page id and id is not given '''
+        # test page without id
+        idless_page = springnote.Page(self.auth, None) 
+        pageid_less_attach = springnote.Attachment(self.auth, idless_page, id=123)
+        should_raise(springnote.SpringnoteError.InvalidOption, 
+                    when=lambda: pageid_less_attach.download())
+
+        # test attachment without id
+        id_less_attach = springnote.Attachment(self.auth, self.page, id=None)
+        should_raise(springnote.SpringnoteError.InvalidOption, 
+                    when=lambda: id_less_attach.download())
 
 
 if __name__ == '__main__':

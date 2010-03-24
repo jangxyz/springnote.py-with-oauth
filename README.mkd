@@ -5,19 +5,20 @@ springnote_oauth.py는 [스프링노트 서비스](http://www.springnote.com/)�
 
 springnote 모듈을 import한 뒤,
 이전 것이든 새로 받은 것이든 access token과 consumer token을 
-넣고 필요한 요청을 날리면 된다.
+넣고 필요한 요청을 날리면 됩니다.
 
-    import springnote
-    sn = springnote.Springnote()
+    from springnote import Springnote
+    sn = Springnote()
 
-1. resource에 접근할 access token을 얻어야 한다. 
-   혹시 이전에 받은 것이 있다면 그것을 사용해도 된다.
+1. resource에 접근할 access token을 얻습니다.
+   혹시 이전에 받은 것이 있다면 그것을 사용해도 괜찮습니다.
 
-        springnote.Springnote().fetch_access_token()
+        Springnote().fetch_access_token()
 
 2. access token을 이용해서 필요한 요청을 날리세요.
 
-        all_pages = springnote.Page(sn).list()
+        from springnote import Page
+        all_pages = Page(sn).list()
 
 
 ## 인증하기
@@ -50,7 +51,7 @@ Page 클래스를 이용하면 쉽게 가져올 수 있습니다.
 
         all_pages = Page.list(sn)
 
-* 제목이 그거였는데...
+* 제목이 그거였는데... [검색]
 
         pages_with_same_title = Page.list(sn, q="아무도 안 쓸 것 같은 제목")
 
@@ -74,14 +75,16 @@ Page 클래스를 이용하면 쉽게 가져올 수 있습니다.
         page.tags   = "썰렁유머"
         page.save()
 
-* 썰렁 유머 따위 사라져버려
+* 썰렁 유머 따위 사라져버려~ [삭제]
 
         worthless_page = Page.list(sn, tags="썰렁유머")[0]
         worthless_page.delete()
 
+
  주의사항
 ==========
- - consumer token을 바꿔주세요.
+
+ - 애플리케이션을 개발할 땐 consumer token을 바꿔주세요.
     consumer token은 각 애플리케이션(consumer)이 스프링노트(service provider)에게 자기가 누구인지 알려주는 증명서입니다. 
     [API 센터](http://api.springnote.com/)에서 각자 애플리케이션을 등록하고 받은 consumer token을 넣어주세요.
     기본은 라이브러리의 consumer token(Springnote python library with OAuth support)입니다. 
@@ -90,4 +93,5 @@ Page 클래스를 이용하면 쉽게 가져올 수 있습니다.
     access token은 비밀번호와 같은 역할을 하기 때문에, 만일의 경우 유출될 경우 극심한 불안에 떨게 됩니다(탈모, 수면장애 등).
     access token이 유출되었다고 생각하는 사용자는 즉시 [API 센터](http://api.springnote.com/)로 달려가 access token을 삭제해 주세요.
     그래도 비밀번호가 유출되는 것보단 안전하잖아요 :)
+
 

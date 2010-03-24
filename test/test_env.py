@@ -81,9 +81,9 @@ class CMock(Mock):
     def __call__(self, *arg, **kwarg): return self
 
 def mock_class_Springnote():
-    global original_sn
+    global original_class_Springnote
     # patch
-    original_sn = springnote.Springnote
+    original_class_Springnote = springnote.Springnote
     host = springnote.HOST
 
     # mock
@@ -93,7 +93,7 @@ def mock_class_Springnote():
     return springnote.Springnote
 
 def restore_class_Springnote():
-    springnote.Springnote = original_sn
+    springnote.Springnote = original_class_Springnote
     return springnote.Springnote
 
 def mock_class_SpringnoteResource():

@@ -307,8 +307,10 @@ class SpringnoteResource(object):
     def __init__(self, auth, parent=None):
         self.auth     = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
         self.parent   = parent
-        self.resource = None    # 스프링노트의 리소스를 담는 dictionary 
+        self.resource = {}      # 스프링노트의 리소스를 담는 dictionary 
         self.raw      = ''      # request의 결과로 가져온 raw data
+        for attr in self.springnote_attributes:
+            setattr(self, attr, None)
         return
 
     def request(self, path, method="GET", params={}, data=None, 
@@ -470,8 +472,7 @@ class Page(SpringnoteResource):
     ]
     # name of attributes used when save()
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
-    # arguments to check parameters
-    check_parameters = {
+    check_parameters = { # arguments to check parameters
         'sort'  : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
         'order' : ['desc', 'asc'],
         'offset': types.IntType,
@@ -699,10 +700,17 @@ class Attachment(SpringnoteResource):
     def download(self, filename=None, filepath=None, overwrite=False, verbose=None):
         """ fetch the attachment file. requires id and parent.id 
         
-        if filename is given, it tries to save to the given path.
-        giving True to filename uses the same filename with self.title
-        however, if file already exists in that path, it does not save.
-        giving overwrite True fixes this behavior.
+        tries to save the download to file if filename (and filepath) is given.
+        it tries to use the default if filename is set to True, 
+        but note that download() does not cannot retreive the filename.
+
+        if there already is a file in the specified path and name, 
+        it will not save it unless you've set the overwrite to True.
+
+        to sum up, saving as a file fails if:
+            * default (filename is None)
+            * filename is True, but self.title is not set
+            * filename is some string, but there already exist a file (overwrite=False)
         """
         self.requires_value_for('id', 'parent.id')
         path, params = self._set_path_params(self.parent, self.id, format=False)
@@ -743,7 +751,7 @@ class Comment(SpringnoteResource):
         "date_created",        # 최초 생성 일시(UTC)예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
         "creator",             # 작성자 nickname
-        "source",              # 내용.
+        "source",              # 내용
     ]
 
     @classmethod
@@ -758,7 +766,6 @@ class Collaboration(SpringnoteResource):
         "access_rights", # 협업자가 가진 권한 예) reader, writer, guest, creator
         "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
     ]
-
     @classmethod
     def list(cls, auth, page, verbose=None):
         path, params = cls._set_path_params(page, plural=False)
@@ -781,17 +788,17 @@ class Lock(SpringnoteResource):
         path, params = self._set_path_params(self.parent, plural=False)
         # XXX: json format of Lock does is not wrapped by 'lock'. springnote bug??
         self.request(path, "GET", params, post_process=False, verbose=verbose)
-        # own post process 
+        # own post process
         self.raw = '{"lock": %s}' % self.raw
         return self._build_model_from_response(self.raw, verbose=verbose)
 
-    def achieve(self, verbose=None):
-        """ try to achieve a lock (POST)"""
+    def acquire(self, verbose=None):
+        """ try to acquire a lock (POST)"""
         self.requires_value_for('parent.id')
         path, params = self._set_path_params(self.parent, plural=False)
         # XXX: json format of Lock does is not wrapped by 'lock'. springnote bug??
         self.request(path, "POST", params, post_process=False, verbose=verbose)
-        # own post process 
+        # own post process
         self.raw = '{"lock": %s}' % self.raw
         return self._build_model_from_response(self.raw, verbose=verbose)
 
@@ -800,12 +807,11 @@ class Revision(SpringnoteResource):
     # there is no 'date_modified', 'contributor_modified', 'rights', and 'tags'
     springnote_attributes = [ 
         "identifier",          # 히스토리 고유 ID
-        "title",               # 페이지 제목
-        "description",         # 히스토리에 대한 설명
         "creator",             # 만든 사람 OpenID
         "date_created",        # 생성된 시간(UTC) 예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 히스토리가 속한 페이지의 ID
-        "source",              # 페이지 내용
+        "source",              # 페이지 내용 -- only at get()
+        "description",         # 히스토리에 대한 설명 -- only at list()
     ]
     def __init__(self, auth, parent, id=None):
         SpringnoteResource.__init__(self, auth, parent=parent)
@@ -825,5 +831,4 @@ class Revision(SpringnoteResource):
         self.requires_value_for('parent.id', 'id')
         path, params = self._set_path_params(self.parent, id=self.id)
         return self.request(path, "GET", params, verbose=verbose)
-
 

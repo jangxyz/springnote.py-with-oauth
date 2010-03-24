@@ -140,11 +140,11 @@ def main():
     ## Request resource
     if resource is None:
         if method == 'GET':
-            if page_id: # GET page 123
+            if page_id: ## GET page 123
                 page = Page(sn, id=page_id).get(verbose=verbose)
                 pprint.pprint(page.resource)
                 print "got page '%s'(#%d), last updated at %s" % (page.title, page.identifier, page.date_modified)
-            else:       # GET pages
+            else:       ## GET pages
                 pages = Page.list(sn, verbose=verbose)
                 first_p = filter(lambda x: x.relation_is_part_of is None, pages)[0]
                 last_p  = max(pages, key=lambda x: x.date_modified)
@@ -152,14 +152,23 @@ def main():
                 print "from '%s'(#%d) to '%s'(#%d)" % (first_p.title, first_p.identifier, last_p.title, last_p.identifier)
                 print "what did you expect? :p"
         elif method == "DELETE":
-            sys.exit("c'mon now, this is just a tutorial program. you don't want me to really remove your pages, do you? :p")
-        elif method == "POST":
-            title, source = argv[:2]
-            Page(
-        elif method == "PUT":
+            print "c'mon now, this is just a tutorial program. :p"
+        elif method == "POST": ## POST page
+            title, source = None, None
+            if len(argv) > 0:  title  = argv.pop(0)
+            if len(argv) > 0:  source = argv.pop(0)
+            if title or source:
+                page = Page(sn, title=title, source=source).save()
+                print "created page %d - '%s' at %s" % (page.id, page.title, page.date_created)
+        elif method == "PUT":  ## PUT page 123
             if not page_id:
                 sys.exit("I need to know which page you want to edit.")
-
+            title, source = None, None
+            if len(argv) > 0:  title  = argv.pop(0)
+            if len(argv) > 0:  source = argv.pop(0)
+            if title or source:
+                page = Page(sn, id=page_id, title=title, source=source).save()
+                print "updated page %d - '%s' at %s" % (page.id, page.title, page.date_modified)
         return
 
     # other resources
@@ -185,8 +194,8 @@ def main():
         else:
             print http_response.read()
             print http_response.status
-    print
 
 if __name__ == '__main__':
     main()
+    print
 
