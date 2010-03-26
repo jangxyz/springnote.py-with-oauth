@@ -5,7 +5,7 @@
 import test_env
 from test_env import *
 
-import unittest, types
+import unittest, types, __builtin__
 
 from pmock import *
 from pmock_xtnd import *
@@ -266,7 +266,7 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         ''' download(filename) saves to local filename '''
         filename = 'localfile.txt'
         run = lambda: self.attach.download(filename)
-        should_call_method(springnote.__builtin__, 'open',
+        should_call_method(__builtin__, 'open',
             when = run,
             arg  = with_(eq(filename), string_contains('w')))
 
@@ -276,7 +276,7 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         self.attach.title = "some_filename.txt"
         filename = True
         run = lambda: self.attach.download(filename)
-        should_call_method(springnote.__builtin__, 'open',
+        should_call_method(__builtin__, 'open',
             when = run,
             arg  = with_(eq(self.attach.title), string_contains('w')))
 
@@ -286,7 +286,7 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         filename = "test_file.txt"
         path     = "/tmp"
         run = lambda: self.attach.download(filename, path)
-        should_call_method(springnote.__builtin__, 'open',
+        should_call_method(__builtin__, 'open',
             when = run,
             arg  = with_(eq(path +"/"+ filename), string_contains('w')))
             
@@ -299,7 +299,7 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         O_os_path_exists = springnote.os.path.exists
         springnote.os.path.exists = lambda x: True
         
-        should_not_call_method(springnote.__builtin__, 'open',
+        should_not_call_method(__builtin__, 'open',
             when = run,
             arg  = with_(eq(filename), string_contains('w')))
 
@@ -315,7 +315,7 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         O_os_path_exists = springnote.os.path.exists
         springnote.os.path.exists = lambda x: True
         
-        should_call_method(springnote.__builtin__, 'open',
+        should_call_method(__builtin__, 'open',
             when = run,
             arg  = with_(eq(filename), string_contains('w')))
 

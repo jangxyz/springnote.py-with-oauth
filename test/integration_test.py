@@ -79,7 +79,7 @@ class IntegrationTestCase(unittest.TestCase):
 
         sn = Springnote()
         self._test_access_token(sn)
-        #self._test_basic_function_calls(sn)
+        self._test_basic_function_calls(sn)
         self._test_object_calls(sn)
 
         self.cleanup(sn)

@@ -483,7 +483,7 @@ class Page(SpringnoteResource):
         'identifiers': re.compile("([0-9]+,)*[0-9]+"),
     }
 
-    def __init__(self, auth, note=None, id=None, 
+    def __init__(self, auth, id=None, note=None, 
             title=None, source=None, relation_is_part_of=None, tags=None,
             parent=None):
         SpringnoteResource.__init__(self, auth)
@@ -582,8 +582,7 @@ class Page(SpringnoteResource):
     def get(self, verbose=None):
         """ fetch the page with current id. 
         hence the page instance MUST have id attribute """
-        if self.id is None:
-            raise SpringnoteError.InvalidOption("need page id to perform get()")
+        self.requires_value_for('id')
         path, params = self._set_path_params()
         return self.request(path, "GET", params=params, verbose=verbose)
 
@@ -592,7 +591,6 @@ class Page(SpringnoteResource):
         """ save the current page.
         create a new page if there is no id, while update if given.
         ungiven parameters are ignored, not removed """
-
         if self.id: method = "PUT"  # update existing page
         else:       method = "POST" # create new page
         path, params = self._set_path_params()
@@ -608,8 +606,7 @@ class Page(SpringnoteResource):
 
     def delete(self, verbose=None):
         """ delete the page """
-        if self.id is None:
-            raise SpringnoteError.InvalidOption("need page id to perform delete()")
+        self.requires_value_for('id')
         path, params = self._set_path_params()
         return self.request(path, "DELETE", params=params, verbose=verbose)
 
