@@ -12,7 +12,7 @@ __version__ = 0.6
 
 import env 
 
-import oauth, sys, types, re, __builtin__
+import oauth, sys, types, re
 import httplib, urllib, socket, os.path
 
 # json import order: simplejson -> json -> FAIL
@@ -91,7 +91,7 @@ def is_file_type(data):
     return False
 
 
-class Springnote:
+class Springnote(object):
     ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
     signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
     BOUNDARY         = 'AaB03x' 
@@ -379,7 +379,7 @@ class SpringnoteResource(object):
         if type(structure) is list:
             multiple_resources = []
             for resource_dict in structure:
-                new_instance = cls(self.auth, parent=self.parent)
+                new_instance = cls(auth=self.auth, parent=self.parent)
                 new_instance.resource = resource_dict[object_name]
                 new_instance.process_resource(new_instance.resource)
                 multiple_resources.append( new_instance )
@@ -626,7 +626,7 @@ class Page(SpringnoteResource):
             kwarg.update(note=note)
 
         path, params = Page._set_path_params_static(**kwarg) # ignores id
-        return cls(auth).request(path, "GET", params, verbose=verbose)
+        return cls(auth=auth).request(path, "GET", params, verbose=verbose)
         
     @classmethod
     def search(cls, auth, query, note=None, verbose=None, **kwarg):
@@ -652,8 +652,8 @@ class Attachment(SpringnoteResource):
         "date_created",        # 첨부 최초 생성 일시(UTC) 예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
     ]
-    def __init__(self, auth, parent, id=None, filename=None, file=None):
-        SpringnoteResource.__init__(self, auth, parent=parent)
+    def __init__(self, parent, id=None, filename=None, file=None, auth=None):
+        SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.id, self.relation_is_part_of = id, parent.id
 
         # file attributes
@@ -697,9 +697,10 @@ class Attachment(SpringnoteResource):
         return path, params
             
     @classmethod
-    def list(cls, auth, page, verbose=None):
+    def list(cls, page, auth=None, verbose=None):
         path, params = Attachment._set_path_params(page)
-        return cls(auth, page).request(path, "GET", params, verbose=verbose)
+        return cls(auth=auth, parent=page) \
+                .request(path, "GET", params, verbose=verbose)
 
     def get(self, verbose=None):
         """ reload the metadata of attachment, but not the file itself. 
@@ -766,9 +767,10 @@ class Comment(SpringnoteResource):
     ]
 
     @classmethod
-    def list(cls, auth, page, verbose=None):
+    def list(cls, page, auth=None, verbose=None):
         path, params = cls._set_path_params(page)
-        return cls(auth, page).request(path, "GET", params, verbose=verbose)
+        return cls(auth=auth or page.auth, parent=page) \
+                .request(path, "GET", params, verbose=verbose)
 
 
 class Collaboration(SpringnoteResource):
@@ -778,9 +780,10 @@ class Collaboration(SpringnoteResource):
         "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
     ]
     @classmethod
-    def list(cls, auth, page, verbose=None):
+    def list(cls, page, auth=None, verbose=None):
         path, params = cls._set_path_params(page, plural=False)
-        return cls(auth, page).request(path, "GET", params, verbose=verbose)
+        return cls(auth=auth or page.auth, parent=page) \
+            .request(path, "GET", params, verbose=verbose)
 
 
 class Lock(SpringnoteResource):
@@ -789,8 +792,8 @@ class Lock(SpringnoteResource):
         "date_expired",        # 잠금이 해제되는 (예상) 시간(UTC) 예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 잠금 리소스가 속한 페이지의 ID
     ]
-    def __init__(self, auth, parent):
-        SpringnoteResource.__init__(self, auth, parent=parent)
+    def __init__(self, parent, auth=None):
+        SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.relation_is_part_of = parent.id
 
     def get(self, verbose=None):
@@ -824,19 +827,20 @@ class Revision(SpringnoteResource):
         "source",              # 페이지 내용 -- only at get()
         "description",         # 히스토리에 대한 설명 -- only at list()
     ]
-    def __init__(self, auth, parent, id=None):
-        SpringnoteResource.__init__(self, auth, parent=parent)
+    def __init__(self, parent, auth=None, id=None):
+        SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.id = id
         self.relation_is_part_of = parent.id
 
     @classmethod
-    def list(cls, auth, page, verbose=None):
+    def list(cls, page, auth=None, verbose=None):
         ''' get list of page revisions
         NOTE: not all attributes are loaded, only the following are:
             [ date_created, identifier, description, creator ]
         ''' 
         path, params = cls._set_path_params(page)
-        return cls(auth, page).request(path, "GET", params, verbose=verbose)
+        return cls(auth=auth or page.auth, parent=page) \
+                .request(path, "GET", params, verbose=verbose)
 
     def get(self, verbose=None):
         self.requires_value_for('parent.id', 'id')

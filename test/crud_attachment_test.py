@@ -50,7 +50,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
         self.auth = Mock()
         self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
         self.page   = springnote.Page(self.auth, id=1)
-        self.attach = springnote.Attachment(self.auth, self.page, id=123)
+        self.attach = springnote.Attachment(self.page, id=123)
 
     def tearDown(self): 
         springnote.Springnote = restore_class_Springnote()
@@ -60,7 +60,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
         ''' has [date_created, relation_is_part_of, description, title] as attributes 
         except identifier. we use id instead.
         '''
-        attch = springnote.Attachment(self.auth, self.page)
+        attch = springnote.Attachment(self.page)
         attrs = "date_created relation_is_part_of description title".split(' ')
         attrs += ['id']
         for attr in attrs:
@@ -76,7 +76,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        springnote.Attachment.list(self.auth, self.page)
+        springnote.Attachment.list(self.page)
 
     @unittest.test
     def class_method_list_with_note_calls_proper_path_and_params(self):
@@ -90,7 +90,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        springnote.Attachment.list(self.auth, self.page)
+        springnote.Attachment.list(self.page)
 
     @unittest.test
     def get_calls_proper_path_and_params(self):
@@ -127,12 +127,12 @@ class AttachmentResourceTestCase(unittest.TestCase):
         ''' delete() raises InvalidOption if any of page id and id is not given '''
         # test page without id
         idless_page = springnote.Page(self.auth, None) 
-        pageid_less_attach = springnote.Attachment(self.auth, idless_page, id=123)
+        pageid_less_attach = springnote.Attachment(idless_page, id=123)
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when=lambda: pageid_less_attach.delete())
 
         # test attachment without id
-        id_less_attach = springnote.Attachment(self.auth, self.page, id=None)
+        id_less_attach = springnote.Attachment(self.page, id=None)
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when=lambda: id_less_attach.delete())
 
@@ -180,14 +180,42 @@ class AttachmentResourceTestCase(unittest.TestCase):
         ''' upload() raises InvalidOption if either page id or file object is not given '''
         # page without an id
         page   = springnote.Page(self.auth, None)
-        attach = springnote.Attachment(self.auth, page, file=self.file_obj)
+        attach = springnote.Attachment(page, file=self.file_obj)
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when = lambda: attach.upload())
 
         # no file
-        attach = springnote.Attachment(self.auth, self.page, file=None)
+        attach = springnote.Attachment(self.page, file=None)
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when = lambda: attach.upload())
+
+class AttachmentAuthTestCase(unittest.TestCase):
+    @unittest.test
+    def use_auth_if_given(self):
+        ''' use given auth '''
+        auth = Mock()
+        auth.access_token, auth.consumer_token = ('AT', 'CT')
+        new_auth = Mock()
+        new_auth.access_token, new_auth.consumer_token = ('NEW_AT', 'NEW_CT')
+
+        page = springnote.Page(auth, id=1)
+        attach = springnote.Attachment(auth=new_auth, parent=page)
+        should_call_method(springnote, 'Springnote',
+            when = lambda: attach.request("some/path"),
+            arg  = with_(eq(new_auth.access_token), eq(new_auth.consumer_token)))
+
+    @unittest.test
+    def use_tokens_from_parent_if_not_given(self):
+        ''' use parent page's access token if none is given '''
+        auth = Mock()
+        auth.access_token, auth.consumer_token = ('AT', 'CT')
+
+        page = springnote.Page(auth, id=1)
+        attach = springnote.Attachment(auth=None, parent=page)
+        should_call_method(springnote, 'Springnote',
+            when = lambda: attach.request("some/path"),
+            arg  = with_(eq(auth.access_token), eq(auth.consumer_token)))
+
 
 class AttachmentDownloadTestCase(unittest.TestCase):
     def setUp(self):    
@@ -209,7 +237,7 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         self.auth = Mock()
         self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
         self.page   = springnote.Page(self.auth, id=1)
-        self.attach = springnote.Attachment(self.auth, self.page, id=123)
+        self.attach = springnote.Attachment(self.page, id=123)
 
     def tearDown(self): 
         springnote.Springnote = restore_class_Springnote()
@@ -228,7 +256,7 @@ class AttachmentDownloadTestCase(unittest.TestCase):
     @unittest.test
     def download_saves_file_content_but_no_title(self):
         ''' download() saves response to content, but not metadata '''
-        attach = springnote.Attachment(self.auth, self.page, id=123)
+        attach = springnote.Attachment(self.page, id=123)
         attach.download()
         assert_that(attach.title,   is_(None))
         assert_that(attach.content, is_not(None))
@@ -299,14 +327,16 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         ''' download() raises InvalidOption if any of page id and id is not given '''
         # test page without id
         idless_page = springnote.Page(self.auth, None) 
-        pageid_less_attach = springnote.Attachment(self.auth, idless_page, id=123)
+        pageid_less_attach = springnote.Attachment(idless_page, id=123)
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when=lambda: pageid_less_attach.download())
 
         # test attachment without id
-        id_less_attach = springnote.Attachment(self.auth, self.page, id=None)
+        id_less_attach = springnote.Attachment(self.page, id=None)
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when=lambda: id_less_attach.download())
+
+        
 
 
 if __name__ == '__main__':

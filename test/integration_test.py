@@ -1,9 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 '''
-    Try each feature
+    Try each feature as much as possible, communicating with springnote.com
 
-        It needs user interaction some_rev (to get access-key)
+        needs user interaction to get access-key
 
 '''
 
@@ -79,7 +79,7 @@ class IntegrationTestCase(unittest.TestCase):
 
         sn = Springnote()
         self._test_access_token(sn)
-        self._test_basic_function_calls(sn)
+        #self._test_basic_function_calls(sn)
         self._test_object_calls(sn)
 
         self.cleanup(sn)
@@ -196,8 +196,7 @@ class IntegrationTestCase(unittest.TestCase):
         resp = sn.springnote_request("DELETE", url, verbose=global_verbose)
         _check_http_status(resp, "error on DELETE page")
 
-    def _test_object_calls(self, sn):
-        auth = sn
+    def _test_object_calls(self, auth):
         # LIST page: get list of pages of default note            
         _starting("test Page.list()..")
         pages = Page.list(auth, verbose=global_verbose)
@@ -241,11 +240,11 @@ class IntegrationTestCase(unittest.TestCase):
         _okay()
 
         # test other resources
-        self._test_attachment_object(auth, page)
-        self._test_comment_object(auth, page)
-        self._test_collaboration_object(auth, page)
-        self._test_lock_object(auth, page)
-        self._test_revision_object(auth, page)
+        self._test_attachment_object(page)
+        self._test_comment_object(page)
+        self._test_collaboration_object(page)
+        self._test_lock_object(page)
+        self._test_revision_object(page)
 
         # DELETE page:   delete page                                  
         _starting("test page.delete() DELETE ..")
@@ -255,22 +254,22 @@ class IntegrationTestCase(unittest.TestCase):
         )
         _okay()
         
-    def _test_attachment_object(self, auth, page):
+    def _test_attachment_object(self, page):
         # LIST attachment - count 0
-        attaches = Attachment.list(auth, page, verbose=global_verbose)
+        attaches = Attachment.list(page, verbose=global_verbose)
         assert_that(len(attaches), is_(0))
 
         # POST attachment
         _starting("test Attachment.upload() CREATE ..")
         data = open(__file__, 'rb') # i shall sacrifice myself for testing!
-        attach = Attachment(auth, page, file=data)
+        attach = Attachment(page, file=data)
         assert_that(attach.date_created, is_(None))
         attach.upload(verbose=global_verbose)
         data.close()
         assert_that(attach.date_created, is_not(None))
         prev_attach_rsrc = attach.resource
         # LIST attachment - count 1
-        attaches = Attachment.list(auth, page, verbose=global_verbose)
+        attaches = Attachment.list(page, verbose=global_verbose)
         assert_that(len(attaches), is_(1))
         assert_that(attaches[0].id, is_(attach.id))
         _okay()
@@ -293,43 +292,43 @@ class IntegrationTestCase(unittest.TestCase):
         _starting("test Attachment.delete() ..")
         attach.delete(verbose=global_verbose)
         # LIST attachment - count 0
-        attaches = Attachment.list(auth, page, verbose=global_verbose)
+        attaches = Attachment.list(page, verbose=global_verbose)
         assert_that(len(attaches), is_(0))
         _okay()
         _starting("test Attachment.list() ..")
         _okay()
 
-    def _test_comment_object(self, auth, page):
+    def _test_comment_object(self, page):
         # LIST comment - count 0
         _starting("test Comment.list() ..")
-        comments = Comment.list(auth, page, verbose=global_verbose)
+        comments = Comment.list(page, verbose=global_verbose)
         assert_that(comments, has_length(0))
         _okay()
 
-    def _test_collaboration_object(self, auth, page):
+    def _test_collaboration_object(self, page):
         # LIST collaboration - count 0
         _starting("test Collaboration.list() ..")
-        collabs = Collaboration.list(auth, page, verbose=global_verbose)
+        collabs = Collaboration.list(page, verbose=global_verbose)
         assert_that(collabs, has_length(0))
         _okay()
 
-    def _test_lock_object(self, auth, page):
+    def _test_lock_object(self, page):
         # GET lock 
         _starting("test lock.get() ..")
-        lock = Lock(auth, page).get(verbose=global_verbose)
+        lock = Lock(page).get(verbose=global_verbose)
         assert_that(lock.relation_is_part_of, is_(page.id))
         _okay()
 
         # POST lock - acquire lock. lock expire time udpated
         _starting("test lock.acquire() ..")
-        new_lock = Lock(auth, page).acquire(verbose=global_verbose)
+        new_lock = Lock(page).acquire(verbose=global_verbose)
         assert_that(new_lock.date_expired, is_not(lock.date_expired))
         _okay()
 
-    def _test_revision_object(self, auth, page):
+    def _test_revision_object(self, page):
         # LIST reivisions - count 4 (page create, update, attachment create, update)
         _starting("test revision.list() ..")
-        revs = Revision.list(auth, page, verbose=global_verbose)
+        revs = Revision.list(page, verbose=global_verbose)
         assert_that(revs, has_length(4))
         first = min(revs, key=lambda x: x.date_created)
         #assert_that(first.description, 
@@ -341,7 +340,7 @@ class IntegrationTestCase(unittest.TestCase):
 
         # GET revision 
         _starting("test revision.get() ..")
-        rev = Revision(auth, page, id=some_rev.id).get(verbose=global_verbose)
+        rev = Revision(page, id=some_rev.id).get(verbose=global_verbose)
         assert_that(rev.source, is_not(None))
         _okay()
 
