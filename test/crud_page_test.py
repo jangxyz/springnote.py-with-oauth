@@ -148,7 +148,7 @@ class PageRequestTestCase(unittest.TestCase):
         source = 'edited'
 
         # method: "PUT"
-        # url:    "/pages/123."
+        # url:    "/pages/123.json"
         # source: "source": "edited"
         url_pattern  = re.compile('''/pages/%d[.]''' % id) 
         body_pattern = re.compile('''["']source["']\s*:\s*["']%s["']''' % source)
@@ -175,11 +175,11 @@ class PageRequestTestCase(unittest.TestCase):
     def delete_method_with_id_calls_delete_page_request(self):
         """ page.delete() with id calls delete page request
         Page(self.auth, id=123).delete() calls 
-        springnote_request(method="DELETE", url="../123.", ..) """
+        springnote_request(method="DELETE", url="../123.json", ..) """
         id = 123
 
         # method: "DELETE"
-        # url:    "/pages/123."
+        # url:    "/pages/123.json"
         url_pattern  = re.compile('''/pages/%d[.]''' % id) 
         self.expects_springnote_request .with_at_least(
             method = eq("DELETE"), 
@@ -225,15 +225,15 @@ class PageRequestTestCase(unittest.TestCase):
         t = self.auth
 
         # no note
-        assert_that(Page(t, note=None, id=None)._set_path_params(),
+        assert_that(Page._set_path_params(note=None, id=None),
                         is_(('/pages.json',      {})))
-        assert_that(Page(t, note=None, id=1234)._set_path_params(),
+        assert_that(Page._set_path_params(note=None, id=1234),
                         is_(('/pages/1234.json', {})))
 
         # with note
-        assert_that(Page(t, note='ab', id=None)._set_path_params(),
+        assert_that(Page._set_path_params(note='ab', id=None),
                         is_(('/pages.json?domain=ab',      {'domain':'ab'})))
-        assert_that(Page(t, note='ab', id=1234)._set_path_params(),
+        assert_that(Page._set_path_params(note='ab', id=1234),
                         is_(('/pages/1234.json?domain=ab', {'domain':'ab'})))
 
     @unittest.test
@@ -243,18 +243,17 @@ class PageRequestTestCase(unittest.TestCase):
         you can force override Page instance attributes '''
 
         Page = springnote.Page
-        Page.format = Page._set_path_params
         t = self.auth
 
         # cancel note
         note = 'jangxyz'
-        path, params = Page(t, note=note, id=None).format(note=None)
+        path, params = Page._set_path_params(note=None, id=None)
         assert_that(params, is_not(has_key('domain')))
         assert_that(params, is_not(has_value(note)))
 
         # cancel id
         id = 123
-        path, params = Page(t, id=id).format(id=None)
+        path, params = Page(t, id=id)._set_path_params(id=None)
         assert_that(path, is_not(string_contains(`id`)))
 
     @unittest.test
@@ -350,9 +349,9 @@ class PageRequestTestCase(unittest.TestCase):
         springnote.Page.list(self.auth)
 
     @unittest.test
-    def list_method_calls_set_path_params_static(self):
-        ''' Page.list() calls _set_path_params_static() '''
-        should_call_method(springnote.Page, '_set_path_params_static', 
+    def list_method_calls_set_path_params(self):
+        ''' Page.list() calls _set_path_params() '''
+        should_call_method(springnote.Page, '_set_path_params', 
             lambda: springnote.Page.list(self.auth, note='jangxyz'), staticmethod
         )
 
@@ -383,7 +382,7 @@ class PageRequestTestCase(unittest.TestCase):
         self.expects_springnote_request.with_at_least(
             method = eq("GET"), 
             url    = string_contains(url_pattern),
-            params = dict_including({'q': query})
+            params = has_entry('q', query)
         )
         springnote.Page.search(self.auth, query=query)
 
@@ -486,7 +485,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         # run
         springnote.Page(self.auth).request("/some/path")
 
-    @unittest.testonly
+    @unittest.test
     def should_dump_data_to_json_on_request(self):
         ''' calls json.dumps() when request() if data is given '''
         data = self.sample_data['page']

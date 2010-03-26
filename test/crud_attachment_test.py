@@ -97,6 +97,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
         ''' get() calls GET ".../pages/1/attachments/123 with .json '''
         self.page.note = 'jangxyz'
         # mock
+        # url: "/pages/1/attachments/123.json?domain=jangxyz"
         url_pattern = "/pages/%d/attachments/%d[.].*\?domain=%s" % (self.page.id, self.attach.id, self.page.note)
         url_pattern = re.compile(url_pattern)
         self.expects_springnote_request.with_at_least(

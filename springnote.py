@@ -440,19 +440,48 @@ class SpringnoteResource(object):
             return True
 
     @classmethod
-    def _set_path_params(cls, page, id=None, format=True, plural=True):
-        path = "/pages/%d/%s" % (page.id, cls.__name__.lower())
-        if plural:  path += 's'
-        if id:      path += "/%d"  % id
-        if format:  path += ".json"
+    def _set_path_params(cls, page, id=None, params={}, format=True, plural=True):
+        ''' default method to build proper path and parameters.
 
+        - page  : has page.id and page.note     (pages/123?domain=jangxyz)
+        - id    : resource id, except for Page  (pages/123/attachments/456)
+        - params: default params                (pages?sort=title)
+        - plural: remove suffix 's' on resource name if False (pages/123/lock)
+        - format: add '.json' to path if True   (pages.json)
+        '''
+        # path for page
+        path = "/pages"
+        if page.id:     path += "/%d" % page.id # /pages/123
+
+        # path for additional resource, if any
+        if cls is not Page: 
+            if cls:     path += "/%s" % cls.__name__.lower()  # ../attachment
+            if plural:  path += 's'             # ../attachments
+            if id:      path += "/%d"  % id     # ../attachments/456
+        if format:      path += ".json"         # ../attachments/456.json
+
+        # update parameters
+        params['note'] = page.note
+        params = cls._update_params(params.copy())
+
+        # apply parameters to path
+        if params:  
+            path += "?%s" % urllib.urlencode(params)
+
+        return (path, params)
+
+    @classmethod
+    def _update_params(cls, kwarg):
+        ''' default behaviour of processing parameters
+
+        1. there is no 'note' parameter. change it to 'domain'
+        2. remove None values '''
+        kwarg['domain'] = kwarg.pop('note', None)
         params = {}
-        if page.note:
-            params = {'domain': page.note}
-            path  += "?domain=%s" % page.note
-
-        return path, params
-
+        for k,v in filter(lambda (k,v): v, kwarg.iteritems()):
+            params[k] = kwarg[k]
+        return params
+            
 
 class Page(SpringnoteResource):
     """ 스프링노트의 page에 대한 정보를 가져오거나, 수정할 수 있습니다.
@@ -472,15 +501,16 @@ class Page(SpringnoteResource):
     ]
     # name of attributes used when save()
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
-    check_parameters = { # arguments to check parameters
-        'sort'     : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
-        'order'    : ['desc', 'asc'],
-        'offset'   : types.IntType,
-        'count'    : types.IntType,
-        'parent_id': types.IntType,
-        'q'        : types.StringTypes,
-        'tags'     : types.StringTypes,
-        'identifiers': re.compile("([0-9]+,)*[0-9]+"),
+    # arguments to check parameter validity
+    check_parameters = { 
+        'sort'     : lambda x: x in ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
+        'order'    : lambda x: x in ['desc', 'asc'],
+        'offset'   : lambda x: types.IntType(x),
+        'count'    : lambda x: types.IntType(x),
+        'parent_id': lambda x: types.IntType(x),
+        'q'        : lambda x: types.UnicodeType(x),
+        'tags'     : lambda x: types.UnicodeType(x),
+        'identifiers': lambda x: re.match("([0-9]+,)*[0-9]+", x).group(0), 
     }
 
     def __init__(self, auth, id=None, note=None, 
@@ -499,7 +529,8 @@ class Page(SpringnoteResource):
 
     def process_resource(self, resource_dict):
         """ + tags를 배열로 변환한다. """
-        SpringnoteResource.process_resource(self, resource_dict)
+        #SpringnoteResource.process_resource(self, resource_dict)
+        super(Page, self).process_resource(resource_dict)
         if "tags" in resource_dict:
             self.tags = filter(None, self.tags.split(','))
         return resource_dict
@@ -517,64 +548,55 @@ class Page(SpringnoteResource):
             writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
         return writable_resource
 
-    @staticmethod
-    def _set_path_params_static(**kwarg):
+    @classmethod
+    def _set_path_params(cls, page=None, **kwarg):
         ''' format path and params, according to page id and note '''
-        # update note and id
-        if 'note' in kwarg: note = kwarg['note']
-        else:               note = None
-        if 'id'   in kwarg: id   = kwarg['id']
-        else:               id   = None
-
-        # update path and parameters
-        if id:
-            path  = "/pages/%d.json" % id
-            params = {}
-        else:
-            path  = "/pages.json"
-            params = Page._update_params(kwarg)
-        if note: 
-            params['domain'] = note
-
-        # apply params to path
-        if params:  
-            path += "?%s" % urllib.urlencode(params)
-
-        return (path, params)
-
-    def _set_path_params(self, **kwarg):
-        if 'note' not in kwarg: kwarg['note'] = self.note
-        if 'id'   not in kwarg: kwarg['id']   = self.id
-        return Page._set_path_params_static(**kwarg)
+        page      = page      or Page(None)
+        page.id   = page.id   or kwarg.pop('id'  , None)
+        page.note = page.note or kwarg.pop('note', None)
+        return super(Page, cls)._set_path_params(page, params=kwarg)
 
     @classmethod
     def _update_params(cls, kwarg):
-        ''' update parameters from given dictionary 
-        only used in page listing. '''
-        params = {}
+        ''' update parameters from given dictionary, used in page listing. 
+        checks for validity '''
+        params = SpringnoteResource._update_params(kwarg.copy())
         for key, value in kwarg.iteritems():
             if key not in cls.check_parameters:
                 continue
+            error_msg = "%s is not allowed for %s" % (value, key)
 
             check_method = cls.check_parameters[key]
-            error_msg = "%s is not allowed for %s" % (value, key)
-            # list of strings
-            if isinstance(check_method, types.ListType):
-                if value in check_method: params[key] = value
-                else:   raise SpringnoteError.InvalidOption(error_msg)
-            # string (or unicode)
-            elif check_method is types.StringTypes:
-                params[key] = unicode(value)
-            # primitive type
-            elif isinstance(check_method, types.TypeType):
+            ## list of strings
+            #if isinstance(check_method, types.ListType):
+            #    if value in check_method: params[key] = value
+            #    else:   raise SpringnoteError.InvalidOption(error_msg)
+            ## string (or unicode)
+            #elif check_method is types.StringTypes:
+            #    params[key] = unicode(value)
+            ## primitive type
+            #elif isinstance(check_method, types.TypeType):
+            #    try:
+            #        params[key] = check_method(value)
+            #    except ValueError:
+            #        raise SpringnoteError.InvalidOption(error_msg)
+            ## regex
+            #elif isinstance(check_method, re._pattern_type):
+            #    if check_method.match(value): params[key] = value
+            #    else:
+            #        raise SpringnoteError.InvalidOption(error_msg)
+            ## lambda
+            #elif isinstance(check_method, types.LambdaType):
+            if isinstance(check_method, types.LambdaType):
                 try:
-                    params[key] = check_method(value)
-                except ValueError:
-                    raise SpringnoteError.InvalidOption(error_msg)
-            # regex
-            elif isinstance(check_method, re._pattern_type):
-                if check_method.match(value): params[key] = value
-                else:
+                    correct_result = check_method(value)
+                    if not correct_result:
+                        raise SpringnoteError.InvalidOption(error_msg)
+                    elif correct_result is True:
+                        params[key] = value 
+                    else:
+                        params[key] = correct_result
+                except:
                     raise SpringnoteError.InvalidOption(error_msg)
         return params
 
@@ -583,7 +605,7 @@ class Page(SpringnoteResource):
         """ fetch the page with current id. 
         hence the page instance MUST have id attribute """
         self.requires_value_for('id')
-        path, params = self._set_path_params()
+        path, params = self._set_path_params(self, id=self.id, note=self.note)
         return self.request(path, "GET", params=params, verbose=verbose)
 
 
@@ -593,7 +615,7 @@ class Page(SpringnoteResource):
         ungiven parameters are ignored, not removed """
         if self.id: method = "PUT"  # update existing page
         else:       method = "POST" # create new page
-        path, params = self._set_path_params()
+        path, params = self._set_path_params(self, id=self.id, note=self.note)
 
         data = {}
         for attr in self.writable_attributes:
@@ -607,7 +629,7 @@ class Page(SpringnoteResource):
     def delete(self, verbose=None):
         """ delete the page """
         self.requires_value_for('id')
-        path, params = self._set_path_params()
+        path, params = self._set_path_params(self, id=self.id, note=self.note)
         return self.request(path, "DELETE", params=params, verbose=verbose)
 
 
@@ -622,7 +644,7 @@ class Page(SpringnoteResource):
         if note: 
             kwarg.update(note=note)
 
-        path, params = Page._set_path_params_static(**kwarg) # ignores id
+        path, params = Page._set_path_params(**kwarg) # ignores id
         return cls(auth=auth).request(path, "GET", params, verbose=verbose)
         
     @classmethod
@@ -679,19 +701,6 @@ class Attachment(SpringnoteResource):
             return File(self.title, self.content)
         return None
     file = property(get_file, set_file)
-
-    @classmethod
-    def _set_path_params(cls, page, id=None, format=True):
-        path = "/pages/%d/attachments" % page.id
-        if id:      path += "/%d"  % id
-        if format:  path += ".json"
-
-        params = {}
-        if page.note:
-            params = {'domain': page.note}
-            path += "?domain=%s" % page.note
-
-        return path, params
             
     @classmethod
     def list(cls, page, auth=None, verbose=None):
