@@ -8,7 +8,7 @@
 """
 __author__  = "Jang-hwan Kim"
 __email__   = "janghwan at gmail dot com"
-__version__ = 0.5
+__version__ = 0.6
 
 import env 
 
