@@ -146,7 +146,6 @@ class RevisionTestCase(SpringnoteResourceTestCase):
     def has_springnote_attributes(self):
         ''' Revision has attributes for springnote '''
         instance = Revision(auth=self.sn, parent=self.page)
-        print instance.resource
         assert_that(getattr(instance, 'identifier',          False), is_not(False))
         assert_that(getattr(instance, 'description',         False), is_not(False))
         assert_that(getattr(instance, 'creator',             False), is_not(False))

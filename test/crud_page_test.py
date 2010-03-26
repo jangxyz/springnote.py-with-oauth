@@ -14,6 +14,31 @@ from hamcrest_xtnd import *
 
 import springnote
 
+# from http://dev.springnote.com/pages/413747, escaped to match python
+sample_json = '{"page": {' \
+    '"rights": null, ' \
+    '"source": "\\u003Cp\\u003ENone\\u003C/p\\u003E\\n", ' \
+    '"creator": "http://deepblue.myid.net/", ' \
+    '"date_created": "2007/10/26 05:30:08 +0000", ' \
+    '"contributor_modified": "http://deepblue.myid.net/", ' \
+    '"date_modified": "2008/01/08 10:55:36 +0000", ' \
+    '"relation_is_part_of": 1, ' \
+    '"identifier": 4, ' \
+    '"tags": "test", ' \
+    '"title": "TestPage" ' \
+'}}'
+sample_data =  {u"page": {
+    u"rights": None,
+    u"source": u"\u003Cp\u003ENone\u003C/p\u003E\n",
+    u"creator": u"http://deepblue.myid.net/",
+    u"date_created": u"2007/10/26 05:30:08 +0000",
+    u"contributor_modified": u"http://deepblue.myid.net/",
+    u"date_modified": u"2008/01/08 10:55:36 +0000",
+    u"relation_is_part_of": 1,
+    u"identifier": 4,
+    u"tags": u"test",
+    u"title": u"TestPage"
+}}
 def set_url(id, note=None, params={}):
     return "http://api.springnote.com/pages/%d.json" % id
 
@@ -62,8 +87,8 @@ class PageRequestTestCase(unittest.TestCase):
             springnote.Springnote.expects(once()).method('springnote_request') \
             .will(return_value(self.m_get_response))
 
-        #self.m_get_response.expects(once()).read().will(return_value('{"page": {}}'))
-        self.m_get_response.expects(once()).read()
+        self.m_get_response.expects(once()).read() \
+            .will(return_value(sample_json))
         self.m_get_response.status = 200
 
         #self.auth = ('FAKE_KEY', 'FAKE_SECRET')
@@ -75,15 +100,6 @@ class PageRequestTestCase(unittest.TestCase):
         restore_class_Springnote()
         restore_class_SpringnoteResource()
         restore_class_Page()
-
-    def get_page_calls_springnote_request(self):
-        """ GET """
-        id = 123
-        self.sn.expects(once())           \
-            .method("springnote_request") \
-                .with_at_least(url=eq(set_url(id)), method=eq("GET"))
-
-        self.springnote.get_page(id)
 
     @unittest.test
     def get_method_with_id_calls_get_page_request(self):
@@ -388,31 +404,6 @@ class PageRequestTestCase(unittest.TestCase):
 
 
 class JsonTestCase(unittest.TestCase):
-    # from http://dev.springnote.com/pages/413747, escaped to match python
-    sample_json = '{"page": {' \
-        '"rights": null, ' \
-        '"source": "\\u003Cp\\u003ENone\\u003C/p\\u003E\\n", ' \
-        '"creator": "http://deepblue.myid.net/", ' \
-        '"date_created": "2007/10/26 05:30:08 +0000", ' \
-        '"contributor_modified": "http://deepblue.myid.net/", ' \
-        '"date_modified": "2008/01/08 10:55:36 +0000", ' \
-        '"relation_is_part_of": 1, ' \
-        '"identifier": 4, ' \
-        '"tags": "test", ' \
-        '"title": "TestPage" ' \
-    '}}'
-    sample_data =  {"page": {
-        "rights": None,
-        "source": "\u003Cp\u003ENone\u003C/p\u003E\n",
-        "creator": "http://deepblue.myid.net/",
-        "date_created": "2007/10/26 05:30:08 +0000",
-        "contributor_modified": "http://deepblue.myid.net/",
-        "date_modified": "2008/01/08 10:55:36 +0000",
-        "relation_is_part_of": 1,
-        "identifier": 4,
-        "tags": "test",
-        "title": "TestPage"
-    }}
     def convert_string_to_unicode(self, data):
         if isinstance(data, types.StringType):
             return springnote.SpringnoteResource._to_unicode(data)
@@ -427,21 +418,6 @@ class JsonTestCase(unittest.TestCase):
             return u_data
         else:
             return data
-
-    def test_json_loads(self):
-        sample_json = self.convert_string_to_unicode(self.sample_json)
-        sample_data = self.convert_string_to_unicode(self.sample_data)
-        assert_that(springnote.json.loads(sample_json), is_(sample_data))
-
-    def test_json_dumps(self):
-        dumped = springnote.json.dumps(self.sample_data)
-        data = springnote.json.loads(dumped)
-        assert_that(data, is_(self.sample_data))
-
-
-class BuildModelFromResponseTestCase(unittest.TestCase):
-    sample_json = JsonTestCase.sample_json
-    sample_data = JsonTestCase.sample_data
 
     def setUp(self):
         self.o_Springnote = springnote.Springnote
@@ -458,12 +434,12 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
 
         # default json.loads behavior
         springnote.json.expects(at_least_once()).method('loads') \
-            .will(return_value(self.sample_data))
+            .will(return_value(sample_data))
 
         # default response behavior
         self.m_get_response.status = 200
         self.m_get_response.expects(at_least_once()).read() \
-            .will(return_value(self.sample_json))
+            .will(return_value(sample_json))
 
         self.auth = Mock()
         self.auth.access_token = ('ACCESS', 'TOKEN')
@@ -479,7 +455,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         ''' calls json.loads() after request() '''
         # mock
         springnote.json.expects(once()).method('loads') \
-            .will(return_value(self.sample_data))       \
+            .will(return_value(sample_data))       \
             .after("springnote_request", springnote.Springnote)
 
         # run
@@ -488,16 +464,59 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
     @unittest.test
     def should_dump_data_to_json_on_request(self):
         ''' calls json.dumps() when request() if data is given '''
-        data = self.sample_data['page']
+        data = sample_data['page']
 
         # mock
         springnote.json.expects(once()).method('dumps') \
-            .will(return_value(self.sample_json))
+            .will(return_value(sample_json))
 
         springnote.Page(self.auth).request("/some/path", data=data)
 
+
+class BuildModelFromResponseTestCase(unittest.TestCase):
+    def setUp(self):
+        self.o_Springnote = springnote.Springnote
+        #self.o_json       = springnote.json
+
+        # mock objects
+        springnote.Springnote = CMock()
+        #springnote.json       = Mock()
+        self.m_get_response   = Mock()
+
+        # default Springnote.springnote_request behavior
+        springnote.Springnote.expects(at_least_once()).method('springnote_request') \
+            .will(return_value(self.m_get_response))
+
+        ## default json.loads behavior
+        #springnote.json.expects(at_least_once()).method('loads') \
+        #    .will(return_value(sample_data))
+
+        # default response behavior
+        self.m_get_response.status = 200
+        self.m_get_response.expects(at_least_once()).read() \
+            .will(return_value(sample_json))
+
+        self.auth = Mock()
+        self.auth.access_token = ('ACCESS', 'TOKEN')
+        self.auth.consumer_token = ('CONSUMER', 'TOKEN')
+
+    def tearDown(self):
+        # restore original
+        springnote.Springnote = self.o_Springnote
+        #springnote.json       = self.o_json
+
+    def should_load_json_after_request(self):
+        ''' calls json.loads() after request() '''
+        # mock
+        springnote.json.expects(once()).method('loads') \
+            .will(return_value(sample_data))       \
+            .after("springnote_request", springnote.Springnote)
+
+        # run
+        springnote.Page(self.auth).request("/some/path")
+
     @unittest.test
-    def resource_attribute_should_be_same_with_json_data(self):
+    def resource_attribute_is_same_with_json_data(self):
         ''' json data is loaded in page.resource 
 
          * json data: {'page': {'title':'something'}} 
@@ -505,7 +524,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         page = springnote.Page(self.auth)
         page.request("/some/path")
 
-        assert_that(page.resource, is_(self.sample_data['page']))
+        assert_that(page.resource, is_(sample_data['page']))
 
     @unittest.test
     def json_data_attributes_are_saved_as_instance_attributes(self):
@@ -513,7 +532,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         page = springnote.Page(self.auth)
         page.request("/some/path")
 
-        for attr_name in self.sample_data['page']:
+        for attr_name in sample_data['page']:
             assert_that(page, responds_to(attr_name))
 
 
@@ -525,7 +544,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         as well as preserving "p" as u"p"
         '''
         # "\u003Cp\u003ENone\u003C/p\u003E\n"
-        source   = self.sample_data["page"]["source"] 
+        source   = sample_data["page"]["source"] 
         resolved = u"<p>None</p>\n"
 
         to_unicode = springnote.Page._to_unicode
@@ -539,7 +558,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         page.request("/some/path")
 
         to_unicode = springnote.Page._to_unicode
-        for attr_name, attr_value in self.sample_data['page'].iteritems():
+        for attr_name, attr_value in sample_data['page'].iteritems():
             if attr_name == 'tags': continue
             if isinstance(attr_value, types.StringTypes):
                 instance_value = getattr(page, attr_name)
@@ -548,11 +567,10 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
     @unittest.test
     def changes_multiple_json_data(self):
         ''' json list is changed to multiple page instances '''
-        list_sample_json = '[%s, %s]' % (self.sample_json, self.sample_json)
-        list_sample_data = [self.sample_data, self.sample_data]
+        list_sample_json = '[%s, %s]' % (sample_json, sample_json)
+        list_sample_data = [sample_data, sample_data]
+
         # mock
-        springnote.json.expects(at_least_once()).method('loads') \
-            .will(return_value(list_sample_data))
         self.m_get_response.expects(at_least_once()).read() \
             .will(return_value(list_sample_json))
 
@@ -560,12 +578,12 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         pages = springnote.Page.list(self.auth)
         assert_that(pages, has_length(2))
         assert_that(pages[0], (instance_of(springnote.Page)))
+        assert_that(pages[0].raw, is_not(has_length(0)))
 
     @unittest.test
     def other_page_methods_calls_request(self):
         ''' get, save, delete calls method request '''
         page = springnote.Page(self.auth, id=123)
-
         should_call_method(page, 'request', lambda: page.get())
         should_call_method(page, 'request', lambda: page.save())
         should_call_method(page, 'request', lambda: page.delete())

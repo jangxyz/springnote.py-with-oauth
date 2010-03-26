@@ -13,6 +13,7 @@ import datetime, sys
 from springnote import Springnote, Page, Attachment, Comment, Collaboration, Revision, Lock, SpringnoteError
 
 global_verbose = None
+global_access_token = None
 
 def _starting(msg):
     print msg,
@@ -83,18 +84,25 @@ class IntegrationTestCase(unittest.TestCase):
         self._test_object_calls(sn)
 
         self.cleanup(sn)
-
         print "done."
 
     def _test_access_token(self, sn):
         ''' GET access token
         get access key (user interaction needed) '''
-        request_token = sn.fetch_request_token(verbose=global_verbose)
-        print "\ngo to this url and approve:", sn.authorize_url(request_token)
-        raw_input("Press enter when complete. ")
-        sn.fetch_access_token(request_token, verbose=global_verbose)
-        print "test GET access token..", 
-        _okay()
+        global global_access_token
+
+        if not global_access_token:
+            request_token = sn.fetch_request_token(verbose=global_verbose)
+            print "\ngo to this url and approve:", sn.authorize_url(request_token)
+            raw_input("Press enter when complete. ")
+            sn.fetch_access_token(request_token, verbose=global_verbose)
+            _starting("test GET access token..")
+            _printout("%s:%s" % (sn.access_token.key, sn.access_token.secret))
+            _okay()
+        else:
+            print "skipping GET access token (using %s)" % global_access_token
+            from springnote import oauth
+            sn.access_token = oauth.OAuthToken(*global_access_token)
 
     def _test_basic_function_calls(self, sn):
         ''' calls each functions following the scenario, checking for response status 200 '''
@@ -373,7 +381,11 @@ class IntegrationTestCase(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    #global global_verbose, global_access_token
     if len(sys.argv) > 1 and sys.argv[1] == '-v':
+        sys.argv.pop(1)
         global_verbose = True
+    if len(sys.argv) > 1:
+        global_access_token = sys.argv.pop(1).split(':')
     unittest.main()
 

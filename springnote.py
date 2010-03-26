@@ -314,7 +314,7 @@ class SpringnoteResource(object):
         return
 
     def request(self, path, method="GET", params={}, data=None, 
-                post_process=True, verbose=None):
+                process_response=True, verbose=None):
         """ springnote에 request를 보내고, 받은 결과를 토대로 리소스를 생성합니다.
             SpringnoteResource를 상속 받는 모든 하위클래스에서 사용합니다. """
 
@@ -353,18 +353,18 @@ class SpringnoteResource(object):
         if not default_dry_run:
             if response.status != httplib.OK:
                 raise SpringnoteError.Response(response)
-            self.raw = response.read()
-            if post_process:
-                return self._build_model_from_response(self.raw, verbose=verbose)
-            else:   
+
+            if not process_response: 
+                self.raw = response.read()
                 return self
+            return self.from_json(self.raw, verbose=verbose)
 
 
-    def _build_model_from_response(self, data, verbose=None): 
-        """ springnote의 response에 따라 모델을 만듭니다. 
+    def from_json(self, data, verbose=None): 
+        """ build resource object from given json string
 
-          * self.raw: response 본문이 저장됩니다.
-          * self.resource: response의 내용이 dictionary 형태로 저장됩니다.
+          * self.raw     : stores json response itself
+          * self.resource: stores converted json response (dictionary)
         """
         cls = self.__class__
         self.raw = data
@@ -372,32 +372,37 @@ class SpringnoteResource(object):
             print '<< data:'
             print data
             print
+
         # build proper object
         object_name = cls.__name__.lower() # Page => 'page'
         structure = json.loads(data)
-        # build multiple data
-        if type(structure) is list:
-            multiple_resources = []
-            for resource_dict in structure:
-                new_instance = cls(auth=self.auth, parent=self.parent)
-                new_instance.resource = resource_dict[object_name]
-                new_instance.process_resource(new_instance.resource)
-                multiple_resources.append( new_instance )
-            return multiple_resources
-        # build single data        
-        elif object_name in data:
-            self.resource = json.loads(data)[object_name]
+        # build single data - {'page': {'id':3}}
+        if isinstance(structure, types.DictType) and object_name in structure:
+            self.resource = structure[object_name]
             # process resource specific tasks
             self.process_resource(self.resource)
             return self
+        # wrap with object name and retry - {'id':3}
+        elif isinstance(structure, types.DictType) and json.loads(data):
+            wrapped_data = '{"%s": %s}' % (object_name, data)
+            self.from_json(wrapped_data, verbose=verbose)
+            self.raw = data
+            return self
+        # build multiple data - [{'page': {'id':3}}, {'page': {'id':4}}]
+        elif type(structure) is list:
+            dump  = lambda d: json.dumps(d, ensure_ascii=False)
+            build = lambda d: cls(auth=self.auth, parent=self.parent). \
+                        from_json(dump(d), verbose=verbose)
+            return map(build, structure)
         else:
-            raise SpringnoteError.ParseError('unable to parse as predefined model: ' + data)
+            raise SpringnoteError.ParseError('unable to parse response: ' + data)
 
     @staticmethod
     def _to_unicode(s):
         #return eval('u"""%s"""' % s)
         def repl(match): return unichr(int(match.group(1), 16))
         return re.sub(r"\\u([0-9a-fA-F]{4})", repl, s)
+
 
     def process_resource(self, resource_dict):
         """ resource마다 따로 필요한 후처리 작업을 해줍니다. 
@@ -529,7 +534,6 @@ class Page(SpringnoteResource):
 
     def process_resource(self, resource_dict):
         """ + tags를 배열로 변환한다. """
-        #SpringnoteResource.process_resource(self, resource_dict)
         super(Page, self).process_resource(resource_dict)
         if "tags" in resource_dict:
             self.tags = filter(None, self.tags.split(','))
@@ -732,7 +736,7 @@ class Attachment(SpringnoteResource):
         """
         self.requires_value_for('id', 'parent.id')
         path, params = self._set_path_params(self.parent, self.id, format=False)
-        self.request(path, "GET", params, post_process=False, verbose=verbose)
+        self.request(path, "GET", params, process_response=False, verbose=verbose)
         # own post process - tries to save file
         self.content = self.raw
         if filename is True:  filename = self.title
@@ -806,21 +810,13 @@ class Lock(SpringnoteResource):
         """ fetch status of lock """
         self.requires_value_for('parent.id')
         path, params = self._set_path_params(self.parent, plural=False)
-        # XXX: json format of Lock does is not wrapped by 'lock'. springnote bug??
-        self.request(path, "GET", params, post_process=False, verbose=verbose)
-        # own post process
-        self.raw = '{"lock": %s}' % self.raw
-        return self._build_model_from_response(self.raw, verbose=verbose)
+        return self.request(path, "GET", params, verbose=verbose)
 
     def acquire(self, verbose=None):
         """ try to acquire a lock (POST)"""
         self.requires_value_for('parent.id')
         path, params = self._set_path_params(self.parent, plural=False)
-        # XXX: json format of Lock does is not wrapped by 'lock'. springnote bug??
-        self.request(path, "POST", params, post_process=False, verbose=verbose)
-        # own post process
-        self.raw = '{"lock": %s}' % self.raw
-        return self._build_model_from_response(self.raw, verbose=verbose)
+        return self.request(path, "POST", params, verbose=verbose)
 
 
 class Revision(SpringnoteResource):
