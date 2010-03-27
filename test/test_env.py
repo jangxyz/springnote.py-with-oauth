@@ -14,7 +14,7 @@ from pmock import Mock
 import pmock
 import springnote
 
-def should_call_method(object, method_name, when, method_type=None, arg=None):
+def should_call_method(object, method_name, when, method_type=None, arg=None, returns=None):
     callable = when
     class IsCalled(Exception): 
         pass
@@ -46,7 +46,7 @@ def should_call_method(object, method_name, when, method_type=None, arg=None):
         else:
             raise AssertionError, "method %s is not called" % method_name
     except IsCalled:    # verify
-        pass 
+        return returns
     finally:            # restore
         setattr(object, method_name, orig)
 
@@ -112,7 +112,10 @@ def restore_class_SpringnoteResource():
 def mock_class_Page():
     global original_page
     original_page = springnote.Page
-
+    springnote.Page = CMock()
+    return springnote.Page
 def restore_class_Page():
     springnote.Page = original_page
+    return springnote.Page
+
 

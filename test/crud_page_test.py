@@ -39,9 +39,6 @@ sample_data =  {u"page": {
     u"tags": u"test",
     u"title": u"TestPage"
 }}
-def set_url(id, note=None, params={}):
-    return "http://api.springnote.com/pages/%d.json" % id
-
 
 class PageRequestAndSpringnoteRequestTestCase(unittest.TestCase):
 

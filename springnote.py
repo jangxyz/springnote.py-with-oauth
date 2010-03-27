@@ -283,20 +283,46 @@ class Springnote(object):
         return
 
 
-    # --- Page sugar ---
-    def get_page(self, note=None, id=None, title=None, 
-            source=None, relation_is_part_of=None, tags=None, verbose=None):
-        """ /pages/:page_id.json에 접근하여 page를 가져옵니다. """
-        return Page(self.access_token, note, id, title, source, 
-            relation_is_part_of, tags).get(verbose)
+    # dark dark magic
+    def __getattr__(self, name):
+        ''' if name ends with '_page' or '_pages', call corresponding method.
+        if not, raise AttributeError.
 
-    def get_pages(self, note=None, verbose=None, **kwarg):
-        """ 전체 page의 리스트를 가져옵니다.  """
-        return Page(self.access_token).list(note, verbose=verbose, **kwarg)
+        name ending with '_page' denote instance method, such as get_page() or 
+        save_page(). '_pages' denote class method, since it returns list of pages.
+        consider the remaining prefix as the name of the method, and call it
+        with self as auth.
+        for instance, 'get_page' calls Page().get(auth=self), with other arguments
+        passed. 'list_pages' calls Page.list(auth=self). 
 
-    # --- Comments sugar ---
-    def get_comments(self, id, note=None, params={}, verbose=None):
-        raise NotImplementedError('you should implement it!')
+        only the methods with verbose argument can be called.
+        ''' 
+        error_msg = "'%s' object has no attribute '%s'"
+        error = AttributeError(error_msg % ('Springnote', name))
+        if name.rstrip('s').endswith('_page'):
+            method_name    = name.rstrip('s').rsplit('_page', 1)[0]
+            method_to_call = getattr(Page, method_name, False)
+            if not callable(method_to_call):
+                raise error
+            if not 'verbose' in method_to_call.func_code.co_varnames:
+                raise error
+
+            # instance method (get_page)
+            if not name.endswith('s'):
+                def sugar_method(*args, **kwarg):
+                    verbose = kwarg.pop('verbose', None)
+                    page = Page(self, *args, **kwarg)
+                    method_to_call = getattr(page, method_name)
+                    return method_to_call(verbose=verbose)
+                return sugar_method
+            # class method (list_pages)
+            else:
+                def sugar_class_method(*args, **kwarg):
+                    verbose = kwarg.pop('verbose', None)
+                    return method_to_call(self, verbose=verbose, *args, **kwarg)
+                return sugar_class_method
+        raise error
+
 
 ## -- OOP layer
 class SpringnoteResource(object):

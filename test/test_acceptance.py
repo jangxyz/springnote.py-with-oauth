@@ -22,6 +22,9 @@ test_collaboration_object = True
 test_lock_object          = True
 test_revision_object      = True
 
+test_sugar_methods      = True
+test_page_sugar_methods = True
+
 
 def _starting(msg):
     print msg,
@@ -90,6 +93,7 @@ class IntegrationTestCase(unittest.TestCase):
         self._test_access_token(sn)
         if test_basic_function_calls: self._test_basic_function_calls(sn)
         if test_object_calls:         self._test_object_calls(sn)
+        if test_sugar_methods:        self._test_sugar_methods(sn)
 
         self.cleanup(sn)
         print "done."
@@ -359,6 +363,64 @@ class IntegrationTestCase(unittest.TestCase):
         _starting("test revision.get() ..")
         rev = Revision(page, id=some_rev.id).get(verbose=global_verbose)
         assert_that(rev.source, is_not(None))
+        _okay()
+
+    def _test_sugar_methods(self, sn):
+        if test_page_sugar_methods: self._test_page_sugar_methods(sn)
+
+    def _test_page_sugar_methods(self, sn):
+        _starting("test sn.list_pages() ..")
+        pages = sn.list_pages(verbose=global_verbose)
+        _printout("%d pages" % len(pages))
+        
+        # LIST page with options
+        last_modified = sorted(pages, \
+            cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
+        most_recent = sn.list_pages(sort="date_modified", order="desc", count=1,
+                        verbose=global_verbose)[0]
+        for attr in ["identifier", "title", "source", "date_modified"]:
+            last_modified_attr = getattr(last_modified, attr)
+            most_recent_attr   = getattr(most_recent, attr)
+            assert_that(last_modified_attr, is_(equal_to(most_recent_attr)))
+        _okay()
+
+        # GET page: get most recently modified page
+        _starting("test sn.get_page() READ ..")
+        page = sn.get_page(id=last_modified.id, verbose=global_verbose)
+        assert_that(page.title, is_(equal_to(last_modified.title)))
+        _okay()
+
+        # POST page: create a page
+        _starting("test sn.save_page() CREATE ..")
+        page = sn.save_page(title   = "POST test for %s" % test_id, 
+                            source  = "hola!",
+                            tags    = global_tag,
+                            verbose =global_verbose)
+        new_pages = sn.list_pages(verbose=global_verbose)
+        assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
+        _okay()
+
+        # PUT page: edit the page
+        _starting("test sn.save_page() UPDATE ..")
+        page.source = "modified"
+        sn.save_page(id=page.id, source=page.source, verbose=global_verbose)
+        refetch = sn.get_page(id=page.id, verbose=global_verbose)
+        assert_that(refetch.source, contains_string("modified"))
+        _okay()
+
+        ## test other resources
+        #if test_attachment_object:     self._test_attachment_object(page)
+        #if test_comment_object:        self._test_comment_object(page)
+        #if test_collaboration_object:  self._test_collaboration_object(page)
+        #if test_lock_object:           self._test_lock_object(page)
+        #if test_revision_object:       self._test_revision_object(page)
+
+        # DELETE page:   delete page                                  
+        _starting("test sn.delete_page() DELETE ..")
+        sn.delete_page(id=page.id, verbose=global_verbose)
+        should_raise(SpringnoteError.Response, 
+            lambda: sn.get_page(id=page.id, verbose=global_verbose)
+        )
         _okay()
 
 

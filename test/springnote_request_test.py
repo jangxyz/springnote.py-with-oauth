@@ -8,6 +8,8 @@ Test Springnote.springnote_request, by mocking out the actual connection
 
 '''
 import test_env
+from test_env import *
+
 import unittest, types
 from pmock import *
 from pmock_xtnd import *
@@ -21,9 +23,11 @@ def mock_module_httplib():
     global original_httplib
     original_httplib = springnote.httplib
     springnote.httplib = Mock() # mock httplib
-
+    return springnote.httplib
 def restore_module_httplib():
     springnote.httplib = original_httplib
+    return springnote.httplib
+    
 
 class HttpParamsTestCase(unittest.TestCase):
     def setUp(self):
@@ -202,7 +206,6 @@ class OauthRequestTestCase(unittest.TestCase):
         token = springnote.oauth.OAuthToken('key', 'secret')
         oauth_req = springnote.Springnote(access_token=token).oauth_request("GET", "http://url.com/data.json")
         assert_that(oauth_req.parameters['oauth_token'], token.key)
-
         
     @unittest.test
     def oauth_parameters_should_be_packed_in_header(self): 
@@ -238,6 +241,51 @@ class OauthRequestTestCase(unittest.TestCase):
         # restore 
         restore_module_httplib()
 
+class SpringnoteBlackMagicTestCase(unittest.TestCase):
+    def setUp(self):
+        springnote.httplib = mock_module_httplib()
+        self.sn = springnote.Springnote()
+
+    def tearDown(self):
+        springnote.httplib = restore_module_httplib()
+
+    @unittest.test
+    def sn_get_page_calls_page_get(self):
+        ''' sn.get_page(id) calls Page(sn, id).get() '''
+        id   = 123
+
+        # test springnote.Page()
+        run  = lambda: self.sn.get_page(id=id)
+        #should_call_method(springnote, 'Page', when=run, 
+        #    arg     = with_(eq(self.sn), id=eq(id)),
+        #    returns = Mock())
+        #self.tearDown()
+        #self.setUp()
+        should_call_method(springnote.Page, 'get', when=run)
+
+    @unittest.test
+    def sn_save_page_calls_page_save(self):
+        ''' sn.save_page(id) calls Page(sn, id).save() '''
+        id   = 123
+        run  = lambda: self.sn.save_page(id=id)
+
+        ## test springnote.Page()
+        #should_call_method(springnote, 'Page', when=run, 
+        #    arg     = with_(eq(self.sn), id=eq(id)),
+        #    returns = Mock())
+        #self.tearDown()
+        #self.setUp()
+        should_call_method(springnote.Page, 'save', when=run)
+
+    @unittest.test
+    def sn_list_pages_calls_page_save(self):
+        ''' sn.list_pages() calls Page.list(sn) '''
+        run  = lambda: self.sn.list_pages()
+        page = Mock()
+
+        # test springnote.Page()
+        should_call_method(springnote.Page, 'list', when=run, 
+            arg = with_at_least(eq(self.sn)), method_type=staticmethod)
 
 if __name__ == '__main__':
     unittest.main()
