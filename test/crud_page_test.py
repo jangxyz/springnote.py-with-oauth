@@ -386,9 +386,9 @@ class PageRequestTestCase(unittest.TestCase):
 
     @unittest.test
     def search_method_calls_get_all_pages_request(self):
-        """ Page.search() accepts query explicitly, rest is same with list()
+        """ Page.search() accepts query explicitly, the rest is same with list()
 
-        Page.search(token, query='name') calls 
+        Page.search(auth, query='name') calls 
         springnote_request(method="GET", url="../pages.json..", ..) """
         query = "keyword"
 
@@ -474,22 +474,30 @@ class JsonTestCase(unittest.TestCase):
 
 
 class BuildModelFromResponseTestCase(unittest.TestCase):
+    def mock_module_json(self):
+        self.o_json = springnote.json
+        springnote.json = Mock()
+        return springnote.json
+
+    def restore_module_json(self):
+        springnote.json = self.o_json
+        return springnote.json
+        
     def setUp(self):
         self.o_Springnote = springnote.Springnote
-        #self.o_json       = springnote.json
+        springnote.json   = self.mock_module_json()
 
         # mock objects
         springnote.Springnote = CMock()
-        #springnote.json       = Mock()
         self.m_get_response   = Mock()
 
         # default Springnote.springnote_request behavior
         springnote.Springnote.expects(at_least_once()).method('springnote_request') \
             .will(return_value(self.m_get_response))
 
-        ## default json.loads behavior
-        #springnote.json.expects(at_least_once()).method('loads') \
-        #    .will(return_value(sample_data))
+        # default json.loads behavior
+        springnote.json.expects(at_least_once()).method('loads') \
+            .will(return_value(sample_data))
 
         # default response behavior
         self.m_get_response.status = 200
@@ -497,13 +505,13 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
             .will(return_value(sample_json))
 
         self.auth = Mock()
-        self.auth.access_token = ('ACCESS', 'TOKEN')
+        self.auth.access_token   = ('ACCESS', 'TOKEN')
         self.auth.consumer_token = ('CONSUMER', 'TOKEN')
 
     def tearDown(self):
         # restore original
         springnote.Springnote = self.o_Springnote
-        #springnote.json       = self.o_json
+        springnote.json = self.restore_module_json()
 
     def should_load_json_after_request(self):
         ''' calls json.loads() after request() '''
@@ -522,7 +530,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
          * json data: {'page': {'title':'something'}} 
          * .resource:          {'title':'something'}  '''
         page = springnote.Page(self.auth)
-        page.request("/some/path")
+        page = page.request("/some/path")
 
         assert_that(page.resource, is_(sample_data['page']))
 
@@ -555,7 +563,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         ''' json data's value is stored in instance attributes,
         except for 'tags' '''
         page = springnote.Page(self.auth)
-        page.request("/some/path")
+        page = page.request("/some/path")
 
         to_unicode = springnote.Page._to_unicode
         for attr_name, attr_value in sample_data['page'].iteritems():
@@ -571,6 +579,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         list_sample_data = [sample_data, sample_data]
 
         # mock
+        self.restore_module_json() # I'm gonna use json
         self.m_get_response.expects(at_least_once()).read() \
             .will(return_value(list_sample_json))
 
@@ -587,6 +596,14 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         should_call_method(page, 'request', lambda: page.get())
         should_call_method(page, 'request', lambda: page.save())
         should_call_method(page, 'request', lambda: page.delete())
+
+    @unittest.test
+    def instance_returned_from_request_must_be_same(self):
+        ''' instance returned after a request must be the same with previous '''
+        page1 = springnote.Page(self.auth, id=123)
+        page2 = page1.get()
+
+        assert_that(page1, is_(page2))
 
 
 if __name__ == '__main__':

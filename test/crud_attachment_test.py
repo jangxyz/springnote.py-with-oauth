@@ -273,12 +273,11 @@ class AttachmentDownloadTestCase(unittest.TestCase):
 
     @unittest.test
     def download_with_filename_true_saves_locally_with_same_filename(self):
-        ''' download(filename=True) saves with same filename '''
+        ''' download(filename=True) saves with same filename if title is set '''
         self.attach.title = "some_filename.txt"
         filename = True
-        run = lambda: self.attach.download(filename)
         should_call_method(__builtin__, 'open',
-            when = run,
+            when = lambda: self.attach.download(filename),
             arg  = with_(eq(self.attach.title), string_contains('w')))
 
     @unittest.test

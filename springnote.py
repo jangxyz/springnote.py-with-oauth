@@ -169,12 +169,12 @@ class Springnote(object):
 
             if body:
                 print '>> body:'
-                print body
+                print `body`
 
             print '>> request:'
             print oauth_request.http_method, oauth_request.http_url
             print 'header:', headers
-            if body: print 'body:', body
+            if body: print 'body:', `body`
             print
 
         # create http(s) connection and request
@@ -556,8 +556,8 @@ class Page(SpringnoteResource):
     def _set_path_params(cls, page=None, **kwarg):
         ''' format path and params, according to page id and note '''
         page      = page      or Page(None)
-        page.id   = page.id   or kwarg.pop('id'  , None)
-        page.note = page.note or kwarg.pop('note', None)
+        page.id   = kwarg.pop('id'  , None) or page.id
+        page.note = kwarg.pop('note', None) or page.note
         return super(Page, cls)._set_path_params(page, params=kwarg)
 
     @classmethod
@@ -614,7 +614,7 @@ class Page(SpringnoteResource):
 
 
     def save(self, verbose=None):
-        """ save the current page.
+        """ save current page, either create or update.
         create a new page if there is no id, while update if given.
         ungiven parameters are ignored, not removed """
         if self.id: method = "PUT"  # update existing page
@@ -813,11 +813,10 @@ class Lock(SpringnoteResource):
         return self.request(path, "GET", params, verbose=verbose)
 
     def acquire(self, verbose=None):
-        """ try to acquire a lock (POST)"""
+        """ try to acquire a lock to edit page (POST) """
         self.requires_value_for('parent.id')
         path, params = self._set_path_params(self.parent, plural=False)
         return self.request(path, "POST", params, verbose=verbose)
-
 
 class Revision(SpringnoteResource):
     # there is no 'date_modified', 'contributor_modified', 'rights', and 'tags'

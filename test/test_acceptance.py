@@ -6,14 +6,22 @@
         needs user interaction to get access-key
 
 '''
-
 import test_env, unittest
 from hamcrest import *
 import datetime, sys
 from springnote import Springnote, Page, Attachment, Comment, Collaboration, Revision, Lock, SpringnoteError
 
-global_verbose = None
+global_verbose      = None
 global_access_token = None
+
+test_basic_function_calls = True
+test_object_calls         = True
+test_attachment_object    = True
+test_comment_object       = True
+test_collaboration_object = True
+test_lock_object          = True
+test_revision_object      = True
+
 
 def _starting(msg):
     print msg,
@@ -30,7 +38,7 @@ def _check_http_status(response, msg):
         print "\tOK"
 
 def _okay():
-    print "\tOK"
+    print "\tok"
 
 def parse_data(json_body, keyword):
     partial = json_body.split(keyword, 2)
@@ -80,8 +88,8 @@ class IntegrationTestCase(unittest.TestCase):
 
         sn = Springnote()
         self._test_access_token(sn)
-        self._test_basic_function_calls(sn)
-        self._test_object_calls(sn)
+        if test_basic_function_calls: self._test_basic_function_calls(sn)
+        if test_object_calls:         self._test_object_calls(sn)
 
         self.cleanup(sn)
         print "done."
@@ -100,7 +108,7 @@ class IntegrationTestCase(unittest.TestCase):
             _printout("%s:%s" % (sn.access_token.key, sn.access_token.secret))
             _okay()
         else:
-            print "skipping GET access token (using %s)" % global_access_token
+            print "skipping GET access token (using %s)" % ':'.join(global_access_token)
             from springnote import oauth
             sn.access_token = oauth.OAuthToken(*global_access_token)
 
@@ -147,7 +155,7 @@ class IntegrationTestCase(unittest.TestCase):
         revision_id = parse_data(resp.read(), "identifier")
 
         # GET revision - get the some_rev revision of the page           
-        _starting("test GET revisiosn..")
+        _starting("test GET revisions..")
         url  = 'http://api.springnote.com/pages/%d/revisions/%d.json' % (page_id, revision_id)
         resp = sn.springnote_request("GET", url, verbose=global_verbose)
         _check_http_status(resp, "error on GET revision")
@@ -242,17 +250,17 @@ class IntegrationTestCase(unittest.TestCase):
         # PUT page: edit the page
         _starting("test page.save() UPDATE ..")
         page.source = "modified"
-        page.save()
+        page.save(verbose=global_verbose)
         refetch = Page(auth, id=page.id).get(verbose=global_verbose)
         assert_that(refetch.source, contains_string("modified"))
         _okay()
 
         # test other resources
-        self._test_attachment_object(page)
-        self._test_comment_object(page)
-        self._test_collaboration_object(page)
-        self._test_lock_object(page)
-        self._test_revision_object(page)
+        if test_attachment_object:     self._test_attachment_object(page)
+        if test_comment_object:        self._test_comment_object(page)
+        if test_collaboration_object:  self._test_collaboration_object(page)
+        if test_lock_object:           self._test_lock_object(page)
+        if test_revision_object:       self._test_revision_object(page)
 
         # DELETE page:   delete page                                  
         _starting("test page.delete() DELETE ..")
@@ -330,6 +338,7 @@ class IntegrationTestCase(unittest.TestCase):
         # POST lock - acquire lock. lock expire time udpated
         _starting("test lock.acquire() ..")
         new_lock = Lock(page).acquire(verbose=global_verbose)
+        assert_that(new_lock.date_expired, is_not(None))
         assert_that(new_lock.date_expired, is_not(lock.date_expired))
         _okay()
 
@@ -381,7 +390,6 @@ class IntegrationTestCase(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    #global global_verbose, global_access_token
     if len(sys.argv) > 1 and sys.argv[1] == '-v':
         sys.argv.pop(1)
         global_verbose = True
