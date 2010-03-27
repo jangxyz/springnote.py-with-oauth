@@ -605,6 +605,18 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
 
         assert_that(page1, is_(page2))
 
+    @unittest.test
+    def id_should_be_same_as_identifier(self):
+        id = 123
+        page = springnote.Page(self.auth)
+        page.id = id
+        assert_that(page.identifier, is_(id))
+
+        page = springnote.Page(self.auth)
+        page.identifier = id
+        assert_that(page.id, is_(id))
+
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -313,6 +313,18 @@ class SpringnoteResource(object):
             setattr(self, attr, None)
         return
 
+    # consider `id' as an alias of `identifier'
+    def set_id(self, id):
+        if hasattr(self, 'identifier'): self.identifier = id
+        else:                           setattr(self, 'id', id)
+    def get_id(self):
+        if   hasattr(self, 'identifier'): return self.identifier
+        elif hasattr(self, 'id'):         return self.id
+        else:   
+            error_msg = "'%s' object has no attribute 'id'" % self.__class__.__name__
+            raise AttributeError(error_msg)
+    id = property(get_id, set_id)
+
     def request(self, path, method="GET", params={}, data=None, 
                 process_response=True, verbose=None):
         ''' calls handle_request and build resource from output '''
@@ -414,12 +426,12 @@ class SpringnoteResource(object):
         raise SpringnoteError.ParseError('unable to build resource from: ' + data)
 
     def replace_with(self, obj):
-        ''' build attributes from object given, ignores None values '''
+        ''' build attributes from object given, ignoring improper values '''
         for attr in dir(obj):
-            value = getattr(obj, attr)
-            if attr.startswith('__'):                   continue
+            value = getattr(obj, attr, None)
             if isinstance(value, types.MethodType):     continue
             if isinstance(value, types.FunctionType):   continue
+            if attr.startswith('__'):                   continue
 
             if value is not None:
                 setattr(self, attr, value)
@@ -445,9 +457,6 @@ class SpringnoteResource(object):
         for key, value in resource_dict.iteritems():
             if isinstance(value, types.StringTypes):
                 setattr(self, key, self._to_unicode(value))
-        # alias id
-        if "identifier" in resource_dict:
-            setattr(self, "id", resource_dict["identifier"])
         self.resource = resource_dict
         return resource_dict
 
@@ -568,19 +577,6 @@ class Page(SpringnoteResource):
             self.tags = filter(None, self.tags.split(','))
         return resource_dict
 
-    def __writable_resources(self):
-        if self.resource is None:
-            self.update_resource()
-
-        writable_resource = {}
-        for key, value in self.resource.iteritems():
-            if key in self.writable_attributes:
-                writable_resource[key] = getattr(self, key)
-        # convert list of tags into string
-        if 'tags' in self.resource:
-            writable_resource['tags'] = ' '.join(getattr(self, 'tags'))
-        return writable_resource
-
     @classmethod
     def _set_path_params(cls, page=None, **kwarg):
         ''' format path and params, according to page id and note '''
@@ -600,37 +596,18 @@ class Page(SpringnoteResource):
             error_msg = "%s is not allowed for %s" % (value, key)
 
             check_method = cls.check_parameters[key]
-            ## list of strings
-            #if isinstance(check_method, types.ListType):
-            #    if value in check_method: params[key] = value
-            #    else:   raise SpringnoteError.InvalidOption(error_msg)
-            ## string (or unicode)
-            #elif check_method is types.StringTypes:
-            #    params[key] = unicode(value)
-            ## primitive type
-            #elif isinstance(check_method, types.TypeType):
-            #    try:
-            #        params[key] = check_method(value)
-            #    except ValueError:
-            #        raise SpringnoteError.InvalidOption(error_msg)
-            ## regex
-            #elif isinstance(check_method, re._pattern_type):
-            #    if check_method.match(value): params[key] = value
-            #    else:
-            #        raise SpringnoteError.InvalidOption(error_msg)
-            ## lambda
-            #elif isinstance(check_method, types.LambdaType):
-            if isinstance(check_method, types.LambdaType):
-                try:
-                    correct_result = check_method(value)
-                    if not correct_result:
-                        raise SpringnoteError.InvalidOption(error_msg)
-                    elif correct_result is True:
-                        params[key] = value 
-                    else:
-                        params[key] = correct_result
-                except:
+            try:
+                correct_result = check_method(value)
+                if not correct_result:
                     raise SpringnoteError.InvalidOption(error_msg)
+                # apply value if result is True
+                elif correct_result is True:
+                    params[key] = value 
+                # otherwise save the result value
+                else:
+                    params[key] = correct_result
+            except:
+                raise SpringnoteError.InvalidOption(error_msg)
         return params
 
     # -- 
@@ -715,6 +692,7 @@ class Attachment(SpringnoteResource):
         self.content, self.description, self.date_created = None, None, None
         if file:     self.set_file(file)
         if filename: self.title = filename
+
 
     def set_file(self, file):
         ''' set title, content, description '''

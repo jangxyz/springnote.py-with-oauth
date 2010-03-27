@@ -57,11 +57,9 @@ class AttachmentResourceTestCase(unittest.TestCase):
 
     @unittest.test
     def has_basic_attributes(self):
-        ''' has [date_created, relation_is_part_of, description, title] as attributes 
-        except identifier. we use id instead.
-        '''
+        ''' has [date_created, relation_is_part_of, description, title, identifier] as attributes '''
         attch = springnote.Attachment(self.page)
-        attrs = "date_created relation_is_part_of description title".split(' ')
+        attrs  = "date_created relation_is_part_of description title identifier".split(' ')
         attrs += ['id']
         for attr in attrs:
             assert_that(attch, responds_to(attr))
@@ -189,6 +187,17 @@ class AttachmentResourceTestCase(unittest.TestCase):
         attach = springnote.Attachment(self.page, file=None)
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when = lambda: attach.upload())
+
+    @unittest.test
+    def id_should_be_same_as_identifier(self):
+        id = 123
+        attach = springnote.Attachment(self.page)
+        attach.id = id
+        assert_that(attach.identifier, is_(id))
+
+        attach = springnote.Attachment(self.page)
+        attach.identifier = id
+        assert_that(attach.id, is_(id))
 
 class AttachmentAuthTestCase(unittest.TestCase):
     @unittest.test

@@ -44,6 +44,16 @@ class SpringnoteResourceTestCase(unittest.TestCase):
         # run
         resourceClass.list(auth=self.sn, page=self.page)
 
+    def verify_id_is_same_with_identifier(self, new_cls):
+        id = 123
+        obj = new_cls()
+        obj.id = id
+        assert_that(obj.identifier, is_(id))
+
+        obj = new_cls()
+        obj.identifier = id
+        assert_that(obj.id, is_(id))
+
 from springnote import Comment
 class CommentTestCase(SpringnoteResourceTestCase):
     sample_json = '{"comment": {' \
@@ -70,6 +80,9 @@ class CommentTestCase(SpringnoteResourceTestCase):
         url_pattern = re.compile("/pages/%d/comments[.]" % self.page.id)
         self.verify_classmethod_list(Comment, "GET", url_pattern)
 
+    @unittest.test
+    def id_should_be_same_as_identifier(self):
+        self.verify_id_is_same_with_identifier(lambda: Comment(self.page))
 
 from springnote import Collaboration
 class CollaborationTestCase(SpringnoteResourceTestCase):
@@ -93,6 +106,13 @@ class CollaborationTestCase(SpringnoteResourceTestCase):
         ''' Collaboration.list() calls GET /pages/123/collaboration.json '''
         url_pattern = re.compile("/pages/%d/collaboration[.]" % self.page.id)
         self.verify_classmethod_list(Collaboration, "GET", url_pattern)
+
+    @unittest.test
+    def there_is_no_id_nor_identifier(self):
+        collab = Collaboration(self.page)
+        assert_that(hasattr(collab, 'id'        ), is_(False))
+        assert_that(hasattr(collab, 'identifier'), is_(False))
+
 
 from springnote import Lock
 class LockTestCase(SpringnoteResourceTestCase):

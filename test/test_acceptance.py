@@ -35,7 +35,7 @@ def _check_http_status(response, msg):
         print 'halting with code', response.status
         sys.exit(response.status)
     else:
-        print "\tOK"
+        _okay()
 
 def _okay():
     print "\tok"

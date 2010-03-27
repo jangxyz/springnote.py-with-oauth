@@ -19,7 +19,8 @@ class RespondsTo(BaseMatcher):
     def __init__(self, responder):
         self.responder = responder
     def _matches(self, item):
-        return self.responder in vars(item)
+        #return self.responder in vars(item)
+        return self.responder in dir(item)
     def describe_to(self, description):
         description.append_text("to respond to .%s" % self.responder)
 responds_to = RespondsTo
