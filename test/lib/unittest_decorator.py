@@ -93,6 +93,7 @@ def _strclass(cls):
 
 __unittest = 1
 
+
 class TestResult:
     """Holder for test result information.
 
@@ -503,6 +504,7 @@ class TestLoader:
     testMethodPrefix = 'test'
     sortTestMethodsUsing = cmp
     suiteClass = TestSuite
+    testonly = None
 
     def loadTestsFromTestCase(self, testCaseClass):
         """Return a suite of all tests cases contained in testCaseClass"""
@@ -521,6 +523,10 @@ class TestLoader:
             if (isinstance(obj, (type, types.ClassType)) and
                 issubclass(obj, TestCase)):
                 tests.append(self.loadTestsFromTestCase(obj))
+        # jangxyz-start
+        if self.testonly:
+            return self.suiteClass([self.testonly])
+        # jangxyz-end
         return self.suiteClass(tests)
 
     def loadTestsFromName(self, name, module=None):
@@ -591,6 +597,7 @@ class TestLoader:
                 if hasattr(attr, "_unittest_test"):
                     results.append(attrname)
                 if hasattr(attr, "_unittest_testonly"):
+                    self.testonly = testCaseClass(attrname)
                     return [attrname]
             return results
         testFnNames = filter_test_only(testCaseClass)
