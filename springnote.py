@@ -315,15 +315,24 @@ class SpringnoteResource(object):
 
     def request(self, path, method="GET", params={}, data=None, 
                 process_response=True, verbose=None):
-        """ springnote에 request를 보내고, 받은 결과를 토대로 리소스를 생성합니다.
-            SpringnoteResource를 상속 받는 모든 하위클래스에서 사용합니다. """
+        ''' calls handle_request and build resource from output '''
+        instance = self.handle_request(auth=self.auth, parent=self.parent,
+                        path=path, method=method, params=params, data=data, 
+                        process_response=process_response, verbose=verbose)
+        self.replace_with(instance)
+        return self
+
+    @classmethod
+    def handle_request(cls, auth, parent, path, method="GET", params={}, data=None, 
+                process_response=True, verbose=None):
+        """ send request to springnote.com and create resource from response.
+            used by every subclass of SpringnoteResource """
 
         url     = "http://%s/%s" % (HOST, path.lstrip('/'))
-        #headers = {'Content-Type': 'application/json'}
         headers = {}
         if data: # set body if given (ex. {'page': ...})
             if not is_file_type(data):
-                data = {self.__class__.__name__.lower(): data}
+                data = {cls.__name__.lower(): data}
                 data = json.dumps(data, ensure_ascii=False)
                 sys.stdout.flush()
                 if type(data) == str: 
@@ -343,31 +352,32 @@ class SpringnoteResource(object):
             print ' * headers:',     headers
 
         # send request
-        response = Springnote(self.auth.access_token, self.auth.consumer_token) \
+        response = Springnote(auth.access_token, auth.consumer_token) \
             .springnote_request(method=method, url=url, params=params, 
                     headers = headers,   
                     body    = data,
                     secure  = use_https, 
                     verbose = verbose
         )
+
         if not default_dry_run:
             if response.status != httplib.OK:
                 raise SpringnoteError.Response(response)
 
+            data = response.read()
             if not process_response: 
-                self.raw = response.read()
-                return self
-            return self.from_json(self.raw, verbose=verbose)
+                new_instance = cls(auth=auth, parent=parent)
+                new_instance.raw = data
+                return new_instance
+            return cls.from_json(data, auth, parent, verbose=verbose)
 
+    @classmethod
+    def from_json(cls, data, auth, parent=None, verbose=None): 
+        """ create and return new resource object from given json string
 
-    def from_json(self, data, verbose=None): 
-        """ build resource object from given json string
-
-          * self.raw     : stores json response itself
-          * self.resource: stores converted json response (dictionary)
+          * raw     : stores json response itself
+          * resource: stores converted json response (dictionary)
         """
-        cls = self.__class__
-        self.raw = data
         if is_verbose(verbose):
             print '<< data:'
             print data
@@ -376,26 +386,45 @@ class SpringnoteResource(object):
         # build proper object
         object_name = cls.__name__.lower() # Page => 'page'
         structure = json.loads(data)
-        # build single data - {'page': {'id':3}}
-        if isinstance(structure, types.DictType) and object_name in structure:
-            self.resource = structure[object_name]
-            # process resource specific tasks
-            self.process_resource(self.resource)
-            return self
-        # wrap with object name and retry - {'id':3}
-        elif isinstance(structure, types.DictType) and json.loads(data):
-            wrapped_data = '{"%s": %s}' % (object_name, data)
-            self.from_json(wrapped_data, verbose=verbose)
-            self.raw = data
-            return self
-        # build multiple data - [{'page': {'id':3}}, {'page': {'id':4}}]
+
+        if isinstance(structure, types.DictType):
+            # build single data - {'page': {'id':3}}
+            if object_name in structure:
+                new_instance = cls(auth=auth, parent=parent)
+                new_instance.raw = data
+                new_instance.resource = structure[object_name]
+
+                # process resource specific tasks
+                new_instance.process_resource(new_instance.resource)
+                return new_instance
+
+            # wrap with object name if not given and retry - {'id':3}
+            elif json.loads(data):
+                wrapped_data = '{"%s": %s}' % (object_name, data)
+                new_instance = cls.from_json(wrapped_data, auth, parent, verbose=verbose)
+                new_instance.raw = data
+                return new_instance
+
+        # build multiple resources - [{'page': {'id':3}}, {'page': {'id':4}}]
         elif type(structure) is list:
-            dump  = lambda d: json.dumps(d, ensure_ascii=False)
-            build = lambda d: cls(auth=self.auth, parent=self.parent). \
-                        from_json(dump(d), verbose=verbose)
+            build = lambda d: cls.from_json(json.dumps(d, ensure_ascii=False),
+                        auth=auth, parent=parent, verbose=verbose)
             return map(build, structure)
-        else:
-            raise SpringnoteError.ParseError('unable to parse response: ' + data)
+
+        raise SpringnoteError.ParseError('unable to build resource from: ' + data)
+
+    def replace_with(self, obj):
+        ''' build attributes from object given, ignores None values '''
+        for attr in dir(obj):
+            value = getattr(obj, attr)
+            if attr.startswith('__'):                   continue
+            if isinstance(value, types.MethodType):     continue
+            if isinstance(value, types.FunctionType):   continue
+
+            if value is not None:
+                setattr(self, attr, value)
+        del obj
+        return self
 
     @staticmethod
     def _to_unicode(s):
@@ -649,7 +678,9 @@ class Page(SpringnoteResource):
             kwarg.update(note=note)
 
         path, params = Page._set_path_params(**kwarg) # ignores id
-        return cls(auth=auth).request(path, "GET", params, verbose=verbose)
+        #return cls(auth=auth).request(path, "GET", params, verbose=verbose)
+        return cls.handle_request(auth, None, 
+                                    path, "GET", params, verbose=verbose)
         
     @classmethod
     def search(cls, auth, query, note=None, verbose=None, **kwarg):
@@ -709,8 +740,8 @@ class Attachment(SpringnoteResource):
     @classmethod
     def list(cls, page, auth=None, verbose=None):
         path, params = Attachment._set_path_params(page)
-        return cls(auth=auth, parent=page) \
-                .request(path, "GET", params, verbose=verbose)
+        return cls.handle_request(auth or page.auth, page,
+                                    path, "GET", params, verbose=verbose)
 
     def get(self, verbose=None):
         """ reload the metadata of attachment, but not the file itself. 
@@ -779,8 +810,8 @@ class Comment(SpringnoteResource):
     @classmethod
     def list(cls, page, auth=None, verbose=None):
         path, params = cls._set_path_params(page)
-        return cls(auth=auth or page.auth, parent=page) \
-                .request(path, "GET", params, verbose=verbose)
+        return cls.handle_request(auth or page.auth, page,
+                                    path, "GET", params, verbose=verbose)
 
 
 class Collaboration(SpringnoteResource):
@@ -792,8 +823,8 @@ class Collaboration(SpringnoteResource):
     @classmethod
     def list(cls, page, auth=None, verbose=None):
         path, params = cls._set_path_params(page, plural=False)
-        return cls(auth=auth or page.auth, parent=page) \
-            .request(path, "GET", params, verbose=verbose)
+        return cls.handle_request(auth or page.auth, page,
+                                    path, "GET", params, verbose=verbose)
 
 
 class Lock(SpringnoteResource):
@@ -840,8 +871,8 @@ class Revision(SpringnoteResource):
             [ date_created, identifier, description, creator ]
         ''' 
         path, params = cls._set_path_params(page)
-        return cls(auth=auth or page.auth, parent=page) \
-                .request(path, "GET", params, verbose=verbose)
+        return cls.handle_request(auth or page.auth, page,
+                                    path, "GET", params, verbose=verbose)
 
     def get(self, verbose=None):
         self.requires_value_for('parent.id', 'id')
