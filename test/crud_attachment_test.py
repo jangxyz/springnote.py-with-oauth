@@ -5,7 +5,7 @@
 import test_env
 from test_env import *
 
-import unittest, types, __builtin__
+import unittest, __builtin__
 
 from pmock import *
 from pmock_xtnd import *

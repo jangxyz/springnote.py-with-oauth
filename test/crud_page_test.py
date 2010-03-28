@@ -5,7 +5,7 @@
 import test_env
 from test_env import *
 
-import unittest, re
+import unittest, re, __builtin__
 from pmock import *
 from pmock_xtnd import *
 
@@ -27,6 +27,7 @@ sample_json = '{"page": {' \
     '"tags": "test", ' \
     '"title": "TestPage" ' \
 '}}'
+list_sample_json = "[%s, %s]" % (sample_json, sample_json)
 sample_data =  {u"page": {
     u"rights": None,
     u"source": u"\u003Cp\u003ENone\u003C/p\u003E\n",
@@ -215,11 +216,8 @@ class PageRequestTestCase(unittest.TestCase):
         """ page.delete() without id is invalid
 
         Page(self.auth).delete() raises InvalidOption error """
-        try:
-            springnote.Page(self.auth).delete()
-            self.fail("did not raise exception")
-        except springnote.SpringnoteError.InvalidOption:
-            pass # proper exception raised
+        should_raise(springnote.SpringnoteError.InvalidOption, 
+                        when=lambda: springnote.Page(self.auth).delete())
 
 
     @unittest.test
@@ -345,7 +343,6 @@ class PageRequestTestCase(unittest.TestCase):
         should_raise(springnote.SpringnoteError.InvalidOption, \
             lambda: page._set_path_params(identifiers="every"))
 
-
     @unittest.test
     def list_method_calls_get_all_pages_request(self):
         """ Page.list() calls get all pages request 
@@ -354,11 +351,10 @@ class PageRequestTestCase(unittest.TestCase):
         # method: "GET"
         # url:    "../pages.json.."
         url_pattern = re.compile("/pages[.]json")
-        self.expects_springnote_request.with_at_least(
-            method = eq("GET"), 
-            url    = string_contains(url_pattern)
+        should_call_method(springnote.Springnote, 'springnote_request', 
+            when = lambda: springnote.Page.list(self.auth), 
+            arg  = with_at_least(method=eq("GET"), url=string_contains(url_pattern)),
         )
-        springnote.Page.list(self.auth)
 
     @unittest.test
     def list_method_calls_set_path_params(self):
@@ -371,32 +367,69 @@ class PageRequestTestCase(unittest.TestCase):
     def list_method_with_note_puts_proper_path(self):
         ''' Page.list() with note calls proper path '''
         # method: "GET"
-        # url:    "../pages.json.."
+        # url:    "../pages.json..?..domain=jangxyz"
         note = 'jangxyz'
         url_pattern = re.compile("/pages[.]json.*domain=%s" % note)
-        self.expects_springnote_request.with_at_least(
-            method = eq("GET"), 
-            url    = string_contains(url_pattern)
+        should_call_method(springnote.Springnote, 'springnote_request', 
+            when = lambda: springnote.Page.list(self.auth, note=note), 
+            arg  = with_at_least(method=eq("GET"), url=string_contains(url_pattern)),
         )
-        springnote.Page.list(self.auth, note=note)
+
+# don't know how to test!
+class ConventionalMethodsTestCase(unittest.TestCase):
+    def setUp(self):
+        self.auth = springnote.Springnote()
 
     @unittest.test
-    def search_method_calls_get_all_pages_request(self):
-        """ Page.search() accepts query explicitly, the rest is same with list()
-
-        Page.search(auth, query='name') calls 
-        springnote_request(method="GET", url="../pages.json..", ..) """
+    def search_method_calls_list_with_q(self):
+        """ Page.search(keyword) is Page.list(query=keyword) """
         query = "keyword"
-
-        # url: "../pages.json..q=keyword"
-        # params: 
-        url_pattern = re.compile("/pages[.].*q=%s" % query)
-        self.expects_springnote_request.with_at_least(
-            method = eq("GET"), 
-            url    = string_contains(url_pattern),
-            params = has_entry('q', query)
+        run   = lambda: springnote.Page.search(self.auth, query = query)
+        should_call_method(springnote.Page, 'list', 
+            when=run, method_type=classmethod,
+            arg = with_at_least(q=eq(query)),
         )
-        springnote.Page.search(self.auth, query=query)
+
+
+    @unittest.test
+    def get_root_method_calls_list_and_filter_afterward(self):
+        """ Page.get_root() calls list and filter with relation_is_part_of 
+        Page.get_root(auth) calls Page.list and filter
+        """
+        run = lambda: springnote.Page.get_root(self.auth)
+        should_call_method(springnote.Page, 'list', 
+            when=run, method_type=classmethod,
+        )
+        # XXX: not really checking the AFTER part
+        should_call_method(__builtin__, 'filter', when=run)
+    
+    @unittest.test
+    def get_parent_method_calls_get_with_id(self): 
+        ''' page.get_parent() calls Page(id=page.relation_is_part_of).get() '''
+        parent_id = 123
+        page = springnote.Page(self.auth, id=456)
+        page.relation_is_part_of = parent_id
+
+        run = lambda: page.get_parent()
+        should_call_class(springnote, 'Page', when=run,
+            arg = with_(eq(self.auth), id=eq(parent_id))
+        )
+        should_call_method(springnote.Page, 'get', when=run)
+
+    @unittest.test
+    def get_parent_method_returns_none_if_no_relation_is_part_of(self): 
+        ''' page.get_parent() without relation_is_part_of returns None '''
+        page = springnote.Page(self.auth, id=456)
+        assert_that(page.get_parent(), is_(None))
+        
+    @unittest.test
+    def get_children_method_calls_list_with_parent_id(self): 
+        ''' page.get_children() calls Page.list(parent_id=page.id) '''
+        page    = springnote.Page(self.auth, id = 123)
+        verbose = True
+        run = lambda: page.get_children(verbose=verbose)
+        should_call_method(springnote.Page, 'list', when=run, method_type=classmethod,
+            arg=with_at_least(parent_id=eq(page.id), verbose=eq(verbose)))
 
 
 class JsonTestCase(unittest.TestCase):
@@ -571,7 +604,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
     @unittest.test
     def changes_multiple_json_data(self):
         ''' json list is changed to multiple page instances '''
-        list_sample_json = '[%s, %s]' % (sample_json, sample_json)
+        #list_sample_json = '[%s, %s]' % (sample_json, sample_json)
         list_sample_data = [sample_data, sample_data]
 
         # mock
@@ -620,7 +653,7 @@ class PageBlackMagicTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
-    # don't know how to test! 
+    @unittest.test
     def page_get_attachment_calls_attachment_get(self):
         ''' page.get_attachment(id, verbose) calls Attachment(page, id).get(verbose) '''
         id      = 456
@@ -630,29 +663,32 @@ class PageBlackMagicTestCase(unittest.TestCase):
         # springnote.Attachment(page, id=123)
         should_call_class(springnote, 'Attachment', when=run, 
                                 arg=with_(eq(self.page), id=eq(id)))
-        ## springnote.Attachment.get(verbose=True)
-        #should_call_method(springnote.Attachment, 'get', when=run, 
-        #                        arg=with_at_least(verbose=eq(verbose)))
+        # springnote.Attachment.get(verbose=True)
+        should_call_method(springnote.Attachment, 'get', when=run, 
+                                arg=with_at_least(verbose=eq(verbose)))
 
-    # don't know how to test! 
+    @unittest.test
     def page_upload_attachment_calls_attachment_upload(self):
         ''' page.upload_attachment(verbose) calls Attachment(page, id).upload(verbose) '''
-        id       = 123
-        filename = 'somefile.txt'
-        file     = Mock()
-        verbose  = True
+        id        = 123
+        filename  = 'somefile.txt'
+        content   = "FILE CONTENT"
+        file      = Mock()
+        file.name = filename
+        file.read = lambda: content
+        verbose   = True
 
-        run  = lambda: self.page.upload_attachment(id, filename, file, verbose=verbose)
+        run  = lambda: self.page.upload_attachment(id, filename=filename, file=file, verbose=verbose)
         # springnote.Attachment(page, id=123)
         should_call_class(springnote, 'Attachment', when=run, 
-                            arg = with_(eq(self.page), id=eq(id),
+                            arg = with_(eq(self.page), eq(id),
                                         filename=eq(filename), file=eq(file)))
         # springnote.Attachment().get(verbose=True)
-        #should_call_method(springnote.Attachment, 'upload', when=run, 
-        #                    arg = with_at_least(verbose=eq(verbose)))
+        should_call_method(springnote.Attachment, 'upload', when=run, 
+                            arg = with_at_least(verbose=eq(verbose)))
 
-    # don't know how to test! 
-    def page_list_attachments_calls_page_save(self):
+    @unittest.test
+    def page_list_attachments_calls_attachment_list(self):
         ''' page.list_attachments() calls Attachment.list(page) '''
         run  = lambda: self.page.list_attachments()
         page = Mock()

@@ -23,9 +23,13 @@ def should_call_class(object, class_name, when, arg=None):
         def __init__(self, *args, **kwarg):
             if isinstance(arg, pmock.AbstractArgumentsMatcher):
                 invocation = pmock.Invocation(class_name, args, kwarg)
+                called.append(invocation)
                 if arg.matches(invocation):
                     raise IsCalled()
-                called.append(invocation)
+                else:
+                    msg = "got: " + str(invocation) + \
+                        "\nexpected: method %s(%s)" % (class_name, arg)
+                    raise AssertionError, msg
             else:
                 raise IsCalled()
 
@@ -63,6 +67,10 @@ def should_call_method(object, method_name, when, method_type=None, arg=None, re
             called.append(invocation)
             if arg.matches(invocation):
                 raise IsCalled()
+            else:
+                msg = "got: " + str(invocation) + \
+                    "\nexpected: method %s(%s)" % (method_name, arg)
+                raise AssertionError, msg
         else:
             raise IsCalled()
 
@@ -72,15 +80,16 @@ def should_call_method(object, method_name, when, method_type=None, arg=None, re
 
     # save
     orig = getattr(object, method_name)
-    if method_type is not None: 
-        orig = method_type(orig)
+    #if method_type is not None: 
+    #    orig = method_type(orig)
 
     # patch
     setattr(object, method_name, is_called)
 
     # test
-    try:                # run
+    try: 
         callable()
+        # should not reach here
         if isinstance(arg, pmock.AbstractArgumentsMatcher):
             msg = "got: " + "\n".join(map(str, called)) + \
                 "\nexpected: method %s(%s)" % (method_name, arg)
@@ -88,7 +97,7 @@ def should_call_method(object, method_name, when, method_type=None, arg=None, re
         else:
             raise AssertionError, "method %s is not called" % method_name
     except IsCalled:    # verify
-        return returns
+        pass
     finally:            # restore
         setattr(object, method_name, orig)
 

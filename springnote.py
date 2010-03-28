@@ -496,8 +496,13 @@ class SpringnoteResource(object):
         for name in attribute_names:
             value = self
             for subname in name.split('.'):
+                # test existence -- to find property method (like .file)
                 if not hasattr(value, subname):
-                    error_msg = "missing %s. %s" % (name, error_msg)
+                    error_msg = "missing %s. " % name + error_msg
+                    raise SpringnoteError.InvalidOption(error_msg)
+                # test value
+                if not getattr(value, subname):
+                    error_msg = "needs proper value in %s. " % name + error_msg
                     raise SpringnoteError.InvalidOption(error_msg)
                 value = getattr(value, subname)
         else:
@@ -649,7 +654,6 @@ class Page(SpringnoteResource):
         path, params = self._set_path_params(self, id=self.id, note=self.note)
         return self.request(path, "GET", params=params, verbose=verbose)
 
-
     def save(self, verbose=None):
         """ save current page, either create or update.
         create a new page if there is no id, while update if given.
@@ -684,18 +688,26 @@ class Page(SpringnoteResource):
         if note: kwarg.update(note=note)
 
         path, params = Page._set_path_params(**kwarg) # ignores id
-        return cls.handle_request(auth, None, 
-                                    path, "GET", params, verbose=verbose)
-        
+        pages = cls.handle_request(auth, None, path, "GET", params, verbose=verbose)
+
+        # connect parents
+        page_dictionary = {}
+        [page_dictionary.setdefault(page.id, page) for page in pages]
+        for page in pages:
+            page.parent = page_dictionary.get(page.relation_is_part_of, None)
+
+        return pages
+
+    # additional methods
     @classmethod
     def search(cls, auth, query, note=None, verbose=None, **kwarg):
-        ''' just calls list() with query '''
+        ''' search page for given query. using list() method '''
         kwarg.update(q=query)
         return cls.list(auth, note=note, verbose=verbose, **kwarg)
 
     @classmethod
     def get_root(cls, auth, note=None, verbose=None):
-        ''' get root page. uses list() method
+        ''' get root page, using list() method
         
         NOTE: not all attributes are loaded, only the following are:
             [title, relation_is_part_of, uri, identifier, date_modified]
@@ -703,6 +715,19 @@ class Page(SpringnoteResource):
         pages = cls.list(auth, note=note, verbose=verbose)
         root_page = filter(lambda p: p.relation_is_part_of is None, pages)[0]
         return root_page
+
+    def get_parent(self, verbose=None):
+        ''' get parent page, using get(id=) method '''
+        if self.relation_is_part_of:
+            self.parent = Page(self.auth, id=self.relation_is_part_of).get(verbose=verbose)
+            return self.parent
+
+    def get_children(self, verbose=None):
+        ''' get children pages, using list(parent_id=) method '''
+        children = Page.list(self.auth, parent_id=self.id, verbose=verbose)
+        for page in children:   
+            page.parent = self
+        return children
     
     # define sugar methods
     for method_name in subresource_method_names:
@@ -728,7 +753,6 @@ class Attachment(SpringnoteResource):
         self.content, self.description, self.date_created = None, None, None
         if file:     
             self.set_file(file)
-
 
     def set_file(self, file):
         ''' set title, content, description '''
