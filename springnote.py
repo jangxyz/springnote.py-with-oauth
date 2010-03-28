@@ -12,7 +12,7 @@ __version__ = 0.6
 
 import env 
 
-import oauth, sys, types, re
+import oauth, sys, types, re, inspect
 import httplib, urllib, socket, os.path
 
 # json import order: simplejson -> json -> FAIL
@@ -293,27 +293,29 @@ class Springnote(object):
 
     # dark dark magic
     def __getattr__(self, name):
-        ''' if name ends with '_page' or '_pages', call corresponding method.
+        ''' let's you magically call sn.get_page() and sort.
+        
+        if name ends with '_page' or '_pages', call corresponding method.
         if not, raise AttributeError.
 
-        name ending with '_page' denote instance method, such as get_page() or 
+        name ending with '_page' denotes instance method, such as get_page() or 
         save_page(). '_pages' denote class method, since it returns list of pages.
         consider the remaining prefix as the name of the method, and call it
         with self as auth.
-        for instance, 'get_page' calls Page().get(auth=self), with other arguments
+        for instance, 'get_page' calls Page(auth=self).get(), with other arguments
         passed. 'list_pages' calls Page.list(auth=self). 
 
-        only the methods with verbose argument can be called.
-        ''' 
-        error_msg = "'%s' object has no attribute '%s'"
-        error = AttributeError(error_msg % ('Springnote', name))
+        only the methods with verbose argument can be called. 
+        otherwise raises AttributeError ''' 
+        error = AttributeError("'Springnote' object has no attribute '%s'" % name)
         if name.rstrip('s').endswith('_page'):
             method_name    = name.rstrip('s').rsplit('_page', 1)[0]
             method_to_call = getattr(Page, method_name, False)
             if not callable(method_to_call):
                 raise error
-            if not 'verbose' in method_to_call.func_code.co_varnames:
-                raise error
+            ## XXX: very dirty
+            #if not 'verbose' in method_to_call.func_code.co_varnames:
+            #    raise error
 
             # instance method (get_page)
             if not name.endswith('s'):
@@ -616,7 +618,7 @@ class Page(SpringnoteResource):
     def _set_path_params(cls, page=None, **kwarg):
         ''' format path and params, according to page id and note '''
         page      = page      or Page(None)
-        page.id   = kwarg.pop('id'  , None) or page.id
+        page.id   = kwarg.pop('id' , None) or page.id
         page.note = kwarg.pop('note', None) or page.note
         return super(Page, cls)._set_path_params(page, params=kwarg)
 
@@ -710,33 +712,106 @@ class Page(SpringnoteResource):
         root_page = filter(lambda p: p.relation_is_part_of is None, pages)[0]
         return root_page
 
-    # boring white magic
-    def list_attachments(self, *args, **kwarg):
-        return self._run_classmethod(Attachment, 'list', *args, **kwarg)
-    def get_attachment(self, *args, **kwarg): 
-        return self._run_method(Attachment, 'get', *args, **kwarg)
-    def download_attachment(self, *args, **kwarg):
-        return self._run_method(Attachment, 'download', *args, **kwarg)
-    def upload_attachment(self, *args, **kwarg):
-        return self._run_method(Attachment, 'upload', *args, **kwarg)
-    def delete_attachment(self, *args, **kwarg):
-        return self._run_method(Attachment, 'delete', *args, **kwarg)
-    # sugar methods for comment
-    def list_comments(self, *args, **kwarg):
-        return self._run_classmethod(Comment, 'list', *args, **kwarg)
-    # sugar methods for collaboration
-    def list_collaborations(self, *args, **kwarg):
-        return self._run_classmethod(Collaboration, 'list', *args, **kwarg)
-    # sugar methods for lock
-    def get_lock(self, *args, **kwarg):
-        return self._run_method(Lock, 'get', *args, **kwarg)
-    def acquire_lock(self, *args, **kwarg):
-        return self._run_method(Lock, 'acquire', *args, **kwarg)
-    # sugar methods for revision
-    def list_revisions(self, *args, **kwarg):
-        return self._run_classmethod(Revision, 'list', *args, **kwarg)
-    def get_revision(self, *args, **kwarg):
-        return self._run_method(Revision, 'get', *args, **kwarg)
+    # wicked and cruel dark magic
+    #def __getattr__(self, name):
+    #    ''' let's you magically call page.list_comments() and sort.
+    #    
+    #    if name ends with '_resourcename' or '_resourcenames', where resourcename
+    #    is name of some resource in lowercase (like attachment or comments), 
+    #    call corresponding method. if not, raise AttributeError.
+
+    #    name ending with '_resourcename' denotes instance method, 
+    #    such as get_attachment() or get_lock(). 
+    #    '_resourcenames' denote class method, since it returns list of resources.
+    #    it considers the remaining prefix as the name of the method, and call it
+    #    with self as argument parent. for instance, 'get_attachment' calls 
+    #    Attachment(parent=self).get(), with other arguments passed. 
+    #    'list_attachments' calls Attachment.list(auth=self). 
+
+    #    only the methods with verbose argument can be called. 
+    #    otherwise raises AttributeError ''' 
+    #    error = AttributeError("'Page' object has no attribute '%s'" % name)
+    #    stripped = name.rstrip('s')
+    #    if '_' not in name: raise error
+    #    method_name, resource_name = stripped.rsplit('_', 1)
+    #    resource_name = resource_name[0].upper() + resource_name[1:]
+    #    if resource_name in globals():
+    #        resource_class = globals()[resource_name]
+
+    #    #if name.rstrip('s').endswith('_page'):
+    #        method_to_call = getattr(resource_class, method_name, False)
+    #        print name
+    #        print resource_name, resource_class
+    #        print method_name, method_to_call
+    #        if not callable(method_to_call):
+    #            raise error
+    #        ## XXX: very dirty
+    #        #if 'verbose' not in method_to_call.func_code.co_varnames:
+    #        #    print method_to_call.func_code.co_varnames
+    #        #    raise error
+
+    #        # instance method (get_attachment)
+    #        if not name.endswith('s'):
+    #            def sugar_method(*args, **kwarg):
+    #                verbose = kwarg.pop('verbose', None)
+    #                rsrc = resource_class(self, *args, **kwarg)
+    #                method_to_call = getattr(rsrc, method_name)
+    #                return method_to_call(verbose=verbose)
+    #            return sugar_method
+    #        # class method (list_comments)
+    #        else:
+    #            def sugar_class_method(*args, **kwarg):
+    #                verbose = kwarg.pop('verbose', None)
+    #                return method_to_call(self, verbose=verbose, *args, **kwarg)
+    #            return sugar_class_method
+    #    raise error
+
+    # boring white magic - but with refactoring!
+    #def _run_method(self, resource_object, method_name, *args, **kwarg):
+    #    verbose  = kwarg.pop('verbose', None)
+    #    instance = resource_object(self, *args, **kwarg)
+    #    method   = getattr(instance, method_name)
+    #    return method(verbose=verbose)
+    #def _run_classmethod(self, resource_object, method_name, *args, **kwarg):
+    #    verbose = kwarg.pop('verbose', None)
+    #    method  = getattr(resource_object, method_name)
+    #    return method(self, verbose=verbose, *args, **kwarg)
+    def _find_and_run(self, function_name, *args, **kwarg):
+        # determine is_classmethod
+        is_classmethod = False
+        if function_name.endswith('s'): is_classmethod = True
+
+        # find (rseource_object, method_name)
+        method_name, resource_name = function_name.rsplit('_', 1)
+        resource_name = resource_name[0].upper() + resource_name[1:].rstrip('s')
+        if resource_name in globals():
+            resource_object = globals()[resource_name]
+        else:
+            raise AttributeError, "name '%s' is not defined" % resource_name
+
+        # find and run
+        verbose = kwarg.pop('verbose', None)
+        if is_classmethod:
+            method = getattr(resource_object, method_name)
+            return method(self, verbose=verbose, *args, **kwarg)
+        else:
+            instance = resource_object(self, *args, **kwarg)
+            method   = getattr(instance, method_name)
+            return method(verbose=verbose)
+
+
+    # sugar methods for attachment
+    def list_attachments   (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def get_attachment     (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def download_attachment(self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def upload_attachment  (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def delete_attachment  (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def list_comments      (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def list_collaborations(self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def get_lock           (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def acquire_lock       (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def list_revisions     (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
+    def get_revision       (self, *args, **kwarg): return self._find_and_run(inspect.stack()[0][3], *args, **kwarg)
 
 
 class Attachment(SpringnoteResource):
