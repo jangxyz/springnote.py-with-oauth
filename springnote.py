@@ -473,13 +473,14 @@ class Page(SpringnoteResource):
     # name of attributes used when save()
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
     check_parameters = { # arguments to check parameters
-        'sort'  : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
-        'order' : ['desc', 'asc'],
-        'offset': types.IntType,
-        'count' : types.IntType,
-        'q'     : types.StringTypes,
-        'tags'  : types.StringTypes,
-        'identifiers': re.compile("([0-9]+,)*[0-9]+"), 
+        'sort'     : ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
+        'order'    : ['desc', 'asc'],
+        'offset'   : types.IntType,
+        'count'    : types.IntType,
+        'parent_id': types.IntType,
+        'q'        : types.StringTypes,
+        'tags'     : types.StringTypes,
+        'identifiers': re.compile("([0-9]+,)*[0-9]+"),
     }
 
     def __init__(self, auth, note=None, id=None, 

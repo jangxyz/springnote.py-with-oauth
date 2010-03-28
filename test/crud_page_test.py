@@ -266,6 +266,7 @@ class PageRequestTestCase(unittest.TestCase):
             sort: identifier | title | relation_is_par_of | date_modified | date_created 
             order: desc | asc
             offset, count
+            parent_id: 123
             q: query
             tags: filter by tags
             identifiers: 1,2
@@ -289,6 +290,11 @@ class PageRequestTestCase(unittest.TestCase):
         assert_that(path, string_contains('q=unicode%20encoding'))
         assert_that(params, has_entry('q', 'unicode encoding'))
 
+        # parent_id
+        path, params = page._set_path_params(parent_id=123)
+        assert_that(path, string_contains('parent_id=123'))
+        assert_that(params, has_entry('parent_id', 123))
+
         # filter by tags
         path, params = page._set_path_params(tags='python')
         assert_that(path, string_contains('tags=python'))
@@ -306,10 +312,10 @@ class PageRequestTestCase(unittest.TestCase):
 
         each of the following options are revealed in path and params:
 
-            sort: not one of [identifier, title, relation_is_par_of, date_modified, date_created] 
-            order: not either [desc, asc]
-            offset, count: not int
-            identifiers: is not form of /1,2/"""
+            sort: one of [identifier, title, relation_is_par_of, date_modified, date_created] 
+            order: either [desc, asc]
+            offset, count, parent_id: int
+            identifiers: is form of /1,2/"""
         page = springnote.Page(self.auth)
 
         # non-existing value raises InvalidOption
@@ -319,6 +325,10 @@ class PageRequestTestCase(unittest.TestCase):
         # wrong typed value raises InvaidOption
         should_raise(springnote.SpringnoteError.InvalidOption, \
             lambda: page._set_path_params(offset='a string value', count='much as i want'))
+
+        # wrong typed value raises InvaidOption
+        should_raise(springnote.SpringnoteError.InvalidOption, \
+            lambda: page._set_path_params(parent_id='something'))
 
         # wrong format of string raises InvalidOption
         should_raise(springnote.SpringnoteError.InvalidOption, \
