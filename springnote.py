@@ -432,10 +432,10 @@ class SpringnoteResource(object):
         for name in attribute_names:
             value = self
             for subname in name.split('.'):
-                value = getattr(value, subname, False)
-                if not value:
+                if not hasattr(value, subname):
                     error_msg = "missing %s. %s" % (name, error_msg)
                     raise SpringnoteError.InvalidOption(error_msg)
+                value = getattr(value, subname)
         else:
             return True
 
