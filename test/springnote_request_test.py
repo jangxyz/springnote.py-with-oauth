@@ -256,11 +256,6 @@ class SpringnoteBlackMagicTestCase(unittest.TestCase):
 
         # test springnote.Page()
         run  = lambda: self.sn.get_page(id=id)
-        #should_call_method(springnote, 'Page', when=run, 
-        #    arg     = with_(eq(self.sn), id=eq(id)),
-        #    returns = Mock())
-        #self.tearDown()
-        #self.setUp()
         should_call_method(springnote.Page, 'get', when=run)
 
     @unittest.test
@@ -269,12 +264,6 @@ class SpringnoteBlackMagicTestCase(unittest.TestCase):
         id   = 123
         run  = lambda: self.sn.save_page(id=id)
 
-        ## test springnote.Page()
-        #should_call_method(springnote, 'Page', when=run, 
-        #    arg     = with_(eq(self.sn), id=eq(id)),
-        #    returns = Mock())
-        #self.tearDown()
-        #self.setUp()
         should_call_method(springnote.Page, 'save', when=run)
 
     @unittest.test

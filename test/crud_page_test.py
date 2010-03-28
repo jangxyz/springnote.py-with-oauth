@@ -74,9 +74,9 @@ class PageRequestTestCase(unittest.TestCase):
     ''' set of tests about requests in Page resource '''
     def setUp(self):
         self.springnote = springnote.Springnote()
-        mock_class_Springnote()
-        mock_class_SpringnoteResource()
-        mock_class_Page()
+        springnote.Springnote = mock_class_Springnote()
+        springnote.SpringnoteResource = mock_class_SpringnoteResource()
+        #springnote.Page = mock_class_Page()
         self.sn = springnote.Springnote
         self.m_get_response = Mock()
 
@@ -95,7 +95,7 @@ class PageRequestTestCase(unittest.TestCase):
     def tearDown(self):
         restore_class_Springnote()
         restore_class_SpringnoteResource()
-        restore_class_Page()
+        #restore_class_Page()
 
     @unittest.test
     def get_method_with_id_calls_get_page_request(self):
@@ -107,10 +107,11 @@ class PageRequestTestCase(unittest.TestCase):
 
         # mock
         url_pattern = "/pages/%d." % id
-        self.expects_springnote_request .with_at_least(
+        self.expects_springnote_request.with_at_least(
             method = eq("GET"), 
             url    = string_contains(url_pattern)
         )
+        # run
         springnote.Page(self.auth, id=id).get()
 
     @unittest.test
@@ -611,6 +612,53 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         page.identifier = id
         assert_that(page.id, is_(id))
 
+class PageBlackMagicTestCase(unittest.TestCase):
+    def setUp(self):
+        self.sn   = springnote.Springnote()
+        self.page = springnote.Page(self.sn, id=123)
+
+    def tearDown(self):
+        pass
+
+    # don't know how to test! 
+    def page_get_attachment_calls_attachment_get(self):
+        ''' page.get_attachment(id, verbose) calls Attachment(page, id).get(verbose) '''
+        id      = 456
+        verbose = True
+
+        run  = lambda: self.page.get_attachment(id=id, verbose=verbose)
+        # springnote.Attachment(page, id=123)
+        should_call_class(springnote, 'Attachment', when=run, 
+                                arg=with_(eq(self.page), id=eq(id)))
+        ## springnote.Attachment.get(verbose=True)
+        #should_call_method(springnote.Attachment, 'get', when=run, 
+        #                        arg=with_at_least(verbose=eq(verbose)))
+
+    # don't know how to test! 
+    def page_upload_attachment_calls_attachment_upload(self):
+        ''' page.upload_attachment(verbose) calls Attachment(page, id).upload(verbose) '''
+        id       = 123
+        filename = 'somefile.txt'
+        file     = Mock()
+        verbose  = True
+
+        run  = lambda: self.page.upload_attachment(id, filename, file, verbose=verbose)
+        # springnote.Attachment(page, id=123)
+        should_call_class(springnote, 'Attachment', when=run, 
+                            arg = with_(eq(self.page), id=eq(id),
+                                        filename=eq(filename), file=eq(file)))
+        # springnote.Attachment().get(verbose=True)
+        #should_call_method(springnote.Attachment, 'upload', when=run, 
+        #                    arg = with_at_least(verbose=eq(verbose)))
+
+    # don't know how to test! 
+    def page_list_attachments_calls_page_save(self):
+        ''' page.list_attachments() calls Attachment.list(page) '''
+        run  = lambda: self.page.list_attachments()
+        page = Mock()
+
+        should_call_method(springnote.Attachment, 'list', when=run, 
+            arg = with_at_least(eq(self.page)), method_type=staticmethod)
 
 
 if __name__ == '__main__':

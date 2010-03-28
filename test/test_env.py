@@ -14,13 +14,53 @@ from pmock import Mock
 import pmock
 import springnote
 
+class IsCalled(Exception): 
+    pass
+def should_call_class(object, class_name, when, arg=None):
+    callable = when
+    called = []
+    class Calling():
+        def __init__(self, *args, **kwarg):
+            if isinstance(arg, pmock.AbstractArgumentsMatcher):
+                invocation = pmock.Invocation(class_name, args, kwarg)
+                if arg.matches(invocation):
+                    raise IsCalled()
+                called.append(invocation)
+            else:
+                raise IsCalled()
+
+    # save
+    orig = getattr(object, class_name)
+
+    # patch
+    setattr(object, class_name, Calling)
+    for attr in dir(orig):
+        if attr.startswith('__'): continue
+        the_class = getattr(object, class_name) 
+        the_value = getattr(orig, attr)
+        setattr(the_class, attr, the_value)
+
+    # test
+    try:                # run
+        callable()
+        if isinstance(arg, pmock.AbstractArgumentsMatcher):
+            msg = "\n".join(map(str, called)) + "\nhave been called, but " \
+                "method %s(%s) is not called" % (class_name, arg)
+            raise AssertionError, msg
+        else:
+            raise AssertionError, "method %s is not called" % class_name
+    except IsCalled:    # verify
+        pass
+    finally:            # restore
+        setattr(object, class_name, orig)
+
 def should_call_method(object, method_name, when, method_type=None, arg=None, returns=None):
     callable = when
-    class IsCalled(Exception): 
-        pass
+    called = []
     def is_called(*args, **kwarg): 
         if isinstance(arg, pmock.AbstractArgumentsMatcher):
             invocation = pmock.Invocation(method_name, args, kwarg)
+            called.append(invocation)
             if arg.matches(invocation):
                 raise IsCalled()
         else:
@@ -42,7 +82,9 @@ def should_call_method(object, method_name, when, method_type=None, arg=None, re
     try:                # run
         callable()
         if isinstance(arg, pmock.AbstractArgumentsMatcher):
-            raise AssertionError, "method %s(%s) is not called" % (method_name, arg)
+            msg = "got: " + "\n".join(map(str, called)) + \
+                "\nexpected: method %s(%s)" % (method_name, arg)
+            raise AssertionError, msg
         else:
             raise AssertionError, "method %s is not called" % method_name
     except IsCalled:    # verify
