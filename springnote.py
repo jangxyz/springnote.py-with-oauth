@@ -8,7 +8,7 @@
 """
 __author__  = "Jang-hwan Kim"
 __email__   = "janghwan at gmail dot com"
-__version__ = 0.6
+__version__ = 0.7
 
 import env 
 
@@ -111,13 +111,16 @@ def run_resource_method(parent, function_name, *args, **kwarg):
 
     # find and run
     verbose = kwarg.pop('verbose', None)
-    if function_name.endswith('s'):
-        method = getattr(resource_object, method_name)
-        return method(parent, verbose=verbose, *args, **kwarg)
-    else:
+    method = getattr(resource_object, method_name)
+    # instance method
+    if method.im_class is resource_object:
         instance = resource_object(parent, *args, **kwarg)
         method   = getattr(instance, method_name)
         return method(verbose=verbose)
+    # class method
+    else:
+        method = getattr(resource_object, method_name)
+        return method(parent, verbose=verbose, *args, **kwarg)
 def register_sugar_method(method_name):
     return lambda parent, *args, **kwarg: run_resource_method(parent, method_name, *args, **kwarg)
 
@@ -313,9 +316,12 @@ class Springnote(object):
         return
 
     # define sugar methods
-    for method_name in ['get_page', 'save_page', 'delete_page', 'list_pages', 'search_pages']:
-        locals()[method_name] = register_sugar_method(method_name)
-        locals()[method_name].__name__ = method_name
+    for method_name in [
+        'get_page', 'save_page', 'delete_page', 'list_pages', 
+        'search_pages', 'get_root_page', 'get_parent_page', 'get_children_pages',
+        ]:
+            locals()[method_name] = register_sugar_method(method_name)
+            locals()[method_name].__name__ = method_name
     del method_name
 
 ## -- OOP layer
@@ -334,16 +340,16 @@ class SpringnoteResource(object):
         return
 
     # consider `id' as an alias of `identifier'
-    def set_id(self, id):
+    def _set_id(self, id):
         if hasattr(self, 'identifier'): self.identifier = id
         else:                           setattr(self, 'id', id)
-    def get_id(self):
+    def _get_id(self):
         if   hasattr(self, 'identifier'): return self.identifier
         elif hasattr(self, 'id'):         return self.id
         else:   
             error_msg = "'%s' object has no attribute 'id'" % self.__class__.__name__
             raise AttributeError(error_msg)
-    id = property(get_id, set_id)
+    id = property(_get_id, _set_id)
 
     def request(self, path, method="GET", params={}, data=None, 
                 process_response=True, verbose=None):
@@ -450,9 +456,8 @@ class SpringnoteResource(object):
         for attr in dir(obj):
             value = getattr(obj, attr, None)
             # XXX: this seems dirty, doesn't it?
-            if isinstance(value, types.MethodType):     continue
-            if isinstance(value, types.FunctionType):   continue
-            if attr.startswith('__'):                   continue
+            if callable(value):         continue
+            if attr.startswith('__'):   continue
 
             if value is not None:
                 setattr(self, attr, value)
@@ -585,7 +590,7 @@ class Page(SpringnoteResource):
     subresource_method_names = [
         # attachment
         "list_attachments",  "get_attachment",    "download_attachment", 
-        "upload_attachment", "delete_attachment", 
+        "upload_attachment", "delete_attachment",
         # comment and collaboration
         "list_comments", "list_collaborations", 
         # lock and revision
@@ -752,14 +757,14 @@ class Attachment(SpringnoteResource):
         self.title = filename
         self.content, self.description, self.date_created = None, None, None
         if file:     
-            self.set_file(file)
+            self._set_file(file)
 
-    def set_file(self, file):
+    def _set_file(self, file):
         ''' set title, content, description '''
         self.title       = file.name
         self.content     = file.read()
         self.description = len(self.content)
-    def get_file(self):
+    def _get_file(self):
         ''' return a fake file object with name and read() it '''
         class File: 
             def __init__(self, name, content):
@@ -774,7 +779,7 @@ class Attachment(SpringnoteResource):
         if self.title and self.content:
             return File(self.title, self.content)
         return None
-    file = property(get_file, set_file)
+    file = property(_get_file, _set_file)
             
     @classmethod
     def list(cls, page, auth=None, verbose=None):
@@ -895,7 +900,7 @@ class Revision(SpringnoteResource):
         "creator",             # 만든 사람 OpenID
         "date_created",        # 생성된 시간(UTC) 예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 히스토리가 속한 페이지의 ID
-        "source",              # 페이지 내용 -- only at get()
+        "source",              # 페이지 내용          -- only at get()
         "description",         # 히스토리에 대한 설명 -- only at list()
     ]
     def __init__(self, parent, auth=None, id=None):
