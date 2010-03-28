@@ -712,15 +712,31 @@ class Page(SpringnoteResource):
 
     # boring white magic
     def list_attachments(self, *args, **kwarg):
-        return Attachment.list(self, verbose=kwarg.get('verbose', None), *args, **rejecting(kwarg, 'verbose'))
+        return self._run_classmethod(Attachment, 'list', *args, **kwarg)
     def get_attachment(self, *args, **kwarg): 
-        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).get(verbose=kwarg.pop('verbose', None))
+        return self._run_method(Attachment, 'get', *args, **kwarg)
     def download_attachment(self, *args, **kwarg):
-        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).download(verbose=kwarg.get('verbose', None))
+        return self._run_method(Attachment, 'download', *args, **kwarg)
     def upload_attachment(self, *args, **kwarg):
-        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).upload(verbose=kwarg.get('verbose', None))
+        return self._run_method(Attachment, 'upload', *args, **kwarg)
     def delete_attachment(self, *args, **kwarg):
-        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).delete(verbose=kwarg.get('verbose', None))
+        return self._run_method(Attachment, 'delete', *args, **kwarg)
+    # sugar methods for comment
+    def list_comments(self, *args, **kwarg):
+        return self._run_classmethod(Comment, 'list', *args, **kwarg)
+    # sugar methods for collaboration
+    def list_collaborations(self, *args, **kwarg):
+        return self._run_classmethod(Collaboration, 'list', *args, **kwarg)
+    # sugar methods for lock
+    def get_lock(self, *args, **kwarg):
+        return self._run_method(Lock, 'get', *args, **kwarg)
+    def acquire_lock(self, *args, **kwarg):
+        return self._run_method(Lock, 'acquire', *args, **kwarg)
+    # sugar methods for revision
+    def list_revisions(self, *args, **kwarg):
+        return self._run_classmethod(Revision, 'list', *args, **kwarg)
+    def get_revision(self, *args, **kwarg):
+        return self._run_method(Revision, 'get', *args, **kwarg)
 
 
 class Attachment(SpringnoteResource):
@@ -753,10 +769,10 @@ class Attachment(SpringnoteResource):
             def __init__(self, name, content):
                 self.name = name
                 self.read = lambda: content
-            def __eq__(self, object):
+            def __eq__(self, file_object):
                 try:
-                    return self.name == object.name and \
-                        self.read() == object.read()
+                    return self.name == file_object.name and \
+                        self.read() == file_object.read()
                 except:
                     return False
         if self.title and self.content:

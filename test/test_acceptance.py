@@ -15,6 +15,7 @@ global_verbose      = None
 global_access_token = None
 
 test_basic_function_calls = True
+# test object calls (eg, Attachment.upload)
 test_object_calls         = True
 test_page_object          = True
 test_attachment_object    = True
@@ -22,10 +23,14 @@ test_comment_object       = True
 test_collaboration_object = True
 test_lock_object          = True
 test_revision_object      = True
-
-test_sugar_methods            = True
-test_page_sugar_methods       = True
-test_attachment_sugar_methods = True
+# test sugar calls (eg, page.upload_attachment)
+test_sugar_methods               = True
+test_page_sugar_methods          = True
+test_attachment_sugar_methods    = True
+test_comment_sugar_methods       = True
+test_collaboration_sugar_methods = True
+test_lock_sugar_methods          = True
+test_revision_sugar_methods      = True
 
 
 def _starting(msg):
@@ -423,11 +428,11 @@ class IntegrationTestCase(unittest.TestCase):
             _okay()
 
         # test other resources
-        if test_attachment_sugar_methods: self._test_attachment_sugar_methods(page)
-        #if test_comment_object:        self._test_comment_object(page)
-        #if test_collaboration_object:  self._test_collaboration_object(page)
-        #if test_lock_object:           self._test_lock_object(page)
-        #if test_revision_object:       self._test_revision_object(page)
+        if test_attachment_sugar_methods:     self._test_attachment_sugar_methods(page)
+        if test_comment_sugar_methods:        self._test_comment_sugar_methods(page)
+        if test_collaboration_sugar_methods:  self._test_collaboration_sugar_methods(page)
+        if test_lock_sugar_methods:           self._test_lock_sugar_methods(page)
+        if test_revision_sugar_methods:       self._test_revision_sugar_methods(page)
 
         # you need this to test other resources
         if True:
@@ -475,6 +480,54 @@ class IntegrationTestCase(unittest.TestCase):
         assert_that(len(attaches), is_(0))
         _okay()
         _starting("test page.list_attachments() ..")
+        _okay()
+
+    def _test_comment_sugar_methods(self, page):
+        # LIST comment - count 0
+        _starting("test page.list_comment() ..")
+        comments = page.list_comments(verbose=global_verbose)
+        assert_that(comments, has_length(0))
+        _okay()
+
+    def _test_collaboration_sugar_methods(self, page):
+        # LIST collaboration - count 0
+        _starting("test page.list_collaboration() ..")
+        collabs = page.list_collaborations(verbose=global_verbose)
+        assert_that(collabs, has_length(0))
+        _okay()
+
+    def _test_lock_sugar_methods(self, page):
+        # GET lock 
+        _starting("test page.get_lock() ..")
+        lock = page.get_lock(verbose=global_verbose)
+        assert_that(lock.relation_is_part_of, is_(page.id))
+        _okay()
+
+        # POST lock - acquire lock. lock expire time udpated
+        _starting("test page.acquire_lock() ..")
+        new_lock = page.acquire_lock(verbose=global_verbose)
+        assert_that(new_lock.date_expired, is_not(None))
+        assert_that(new_lock.date_expired, is_not(lock.date_expired))
+        _okay()
+
+    def _test_revision_sugar_methods(self, page):
+        # LIST reivisions - count 4 (page create, update, attachment create, update)
+        _starting("test page.list_revision() ..")
+        revs = page.list_revisions(verbose=global_verbose)
+        number_of_revisions = 2
+        if test_attachment_sugar_methods: 
+            number_of_revisions = 4
+        assert_that(revs, has_length(number_of_revisions))
+        first = min(revs, key=lambda x: x.date_created)
+        assert_that(first.relation_is_part_of, is_(page.id))
+        some_rev = filter(lambda r: r.description == '', revs)[0]
+        assert_that(some_rev.source, is_(None))
+        _okay()
+
+        # GET revision 
+        _starting("test page.get_revision() ..")
+        rev = page.get_revision(id=some_rev.id, verbose=global_verbose)
+        assert_that(rev.source, is_not(None))
         _okay()
 
 
