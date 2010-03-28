@@ -90,6 +90,14 @@ def is_file_type(data):
         return True
     return False
 
+def rejecting(d, key):
+    ''' return a copy of dictionary without the entry with given key '''
+    new_d = {}
+    for k,v in d.iteritems():
+        if k == key: continue
+        new_d[k] = v
+    return new_d
+
 
 class Springnote(object):
     ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
@@ -455,6 +463,7 @@ class SpringnoteResource(object):
         ''' build attributes from object given, ignoring improper values '''
         for attr in dir(obj):
             value = getattr(obj, attr, None)
+            # XXX: this seems dirty, doesn't it?
             if isinstance(value, types.MethodType):     continue
             if isinstance(value, types.FunctionType):   continue
             if attr.startswith('__'):                   continue
@@ -497,7 +506,7 @@ class SpringnoteResource(object):
         elif len(attribute_names) > 2: 
             error_msg = "all " + error_msg
         error_msg = "needs %s to perform the request" % error_msg
-        # check recursive names
+        # check names recursively (eg, parent.id)
         for name in attribute_names:
             value = self
             for subname in name.split('.'):
@@ -701,6 +710,19 @@ class Page(SpringnoteResource):
         root_page = filter(lambda p: p.relation_is_part_of is None, pages)[0]
         return root_page
 
+    # boring white magic
+    def list_attachments(self, *args, **kwarg):
+        return Attachment.list(self, verbose=kwarg.get('verbose', None), *args, **rejecting(kwarg, 'verbose'))
+    def get_attachment(self, *args, **kwarg): 
+        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).get(verbose=kwarg.pop('verbose', None))
+    def download_attachment(self, *args, **kwarg):
+        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).download(verbose=kwarg.get('verbose', None))
+    def upload_attachment(self, *args, **kwarg):
+        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).upload(verbose=kwarg.get('verbose', None))
+    def delete_attachment(self, *args, **kwarg):
+        return Attachment(self, *args, **rejecting(kwarg, 'verbose')).delete(verbose=kwarg.get('verbose', None))
+
+
 class Attachment(SpringnoteResource):
     springnote_attributes = [ 
         "identifier",          # 첨부 고유 ID 예) 2
@@ -716,14 +738,15 @@ class Attachment(SpringnoteResource):
         # file attributes
         self.title = filename
         self.content, self.description, self.date_created = None, None, None
-        if file:     self.set_file(file)
-        if filename: self.title = filename
+        if file:     
+            self.set_file(file)
 
 
     def set_file(self, file):
         ''' set title, content, description '''
-        self.title, self.content = file.name, file.read()
-        self.description         = len(self.content)
+        self.title       = file.name
+        self.content     = file.read()
+        self.description = len(self.content)
     def get_file(self):
         ''' return a fake file object with name and read() it '''
         class File: 

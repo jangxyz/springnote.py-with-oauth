@@ -88,7 +88,6 @@ class PageRequestTestCase(unittest.TestCase):
             .will(return_value(sample_json))
         self.m_get_response.status = 200
 
-        #self.auth = ('FAKE_KEY', 'FAKE_SECRET')
         self.auth = Mock()
         self.auth.access_token = ('ACCESS', 'TOKEN')
         self.auth.consumer_token = ('CONSUMER', 'TOKEN')
@@ -138,7 +137,6 @@ class PageRequestTestCase(unittest.TestCase):
         source = 'blah blah ahaha'
 
         # TODO: check access token
-        # TODO: replace with pmock.or
         # TODO: make regex more verbose
         # method: "POST"
         # source: '{"page": {"source": "blah blah ahaha", "title": "some title"}}'

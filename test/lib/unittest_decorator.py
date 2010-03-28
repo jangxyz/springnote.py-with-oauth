@@ -769,7 +769,7 @@ def test(method):
 # jangxyz
 def testonly(method):
     """A decorator for testing only one."""
-    sys.stderr.write("[WARNING] running with 'testonly'. remove @unittest.testonly to fully run.\n\n")
+    sys.stderr.write("[WARNING] running with 'testonly'. remove @unittest.testonly to run everything.\n\n")
     method._unittest_testonly = True
     return method
 

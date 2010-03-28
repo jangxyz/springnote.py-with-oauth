@@ -16,14 +16,16 @@ global_access_token = None
 
 test_basic_function_calls = True
 test_object_calls         = True
+test_page_object          = True
 test_attachment_object    = True
 test_comment_object       = True
 test_collaboration_object = True
 test_lock_object          = True
 test_revision_object      = True
 
-test_sugar_methods      = True
-test_page_sugar_methods = True
+test_sugar_methods            = True
+test_page_sugar_methods       = True
+test_attachment_sugar_methods = True
 
 
 def _starting(msg):
@@ -60,6 +62,10 @@ def should_raise(exception, when):
         error_msg = 'expected %s to be raised but instead got %s:"%s"' % (exception, type(e), e)
         raise AssertionError, error_msg
 
+class File:     # simple file object
+    def __init__(self, name, content):
+        self.name = name
+        self.read = lambda: content
 
 class IntegrationTestCase(unittest.TestCase):
     def setUp(self):    pass
@@ -217,47 +223,52 @@ class IntegrationTestCase(unittest.TestCase):
         _check_http_status(resp, "error on DELETE page")
 
     def _test_object_calls(self, auth):
-        # LIST page: get list of pages of default note            
-        _starting("test Page.list()..")
-        pages = Page.list(auth, verbose=global_verbose)
-        _printout("%d pages" % len(pages))
-        
-        # LIST page with options
-        last_modified = sorted(pages, \
-            cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
-        most_recent = Page.list(auth, 
-                        sort="date_modified", order="desc", count=1,
-                        verbose=global_verbose)[0]
-        for attr in ["identifier", "title", "source", "date_modified"]:
-            last_modified_attr = getattr(last_modified, attr)
-            most_recent_attr   = getattr(most_recent, attr)
-            assert_that(last_modified_attr, is_(equal_to(most_recent_attr)))
-        _okay()
+        if test_page_object:
+            # LIST page: get list of pages of default note            
+            _starting("test Page.list()..")
+            pages = Page.list(auth, verbose=global_verbose)
+            _printout("%d pages" % len(pages))
+            
+            # LIST page with options
+            last_modified = sorted(pages, \
+                cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
+            most_recent = Page.list(auth, 
+                            sort="date_modified", order="desc", count=1,
+                            verbose=global_verbose)[0]
+            for attr in ["identifier", "title", "source", "date_modified"]:
+                last_modified_attr = getattr(last_modified, attr)
+                most_recent_attr   = getattr(most_recent, attr)
+                assert_that(last_modified_attr, is_(equal_to(most_recent_attr)))
+            _okay()
 
-        # GET page: get most recently modified page
-        _starting("test page.get() READ ..")
-        page = Page(auth, id=last_modified.id).get(verbose=global_verbose)
-        assert_that(page.title, is_(equal_to(last_modified.title)))
-        _okay()
+            # GET page: get most recently modified page
+            _starting("test page.get() READ ..")
+            page = Page(auth, id=last_modified.id).get(verbose=global_verbose)
+            assert_that(page.title, is_(equal_to(last_modified.title)))
+            _okay()
 
-        # POST page: create a page
-        _starting("test page.save() CREATE ..")
-        page = Page(auth, 
-            title  = "POST test for %s" % test_id, 
-            source = "hola!",
-            tags   = global_tag 
-        ).save(verbose=global_verbose)
-        new_pages = Page.list(auth, verbose=global_verbose)
-        assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
-        _okay()
+        # you need this to test other resources
+        if True:
+            # POST page: create a page
+            _starting("test page.save() CREATE ..")
+            page = Page(auth, 
+                title  = "POST test for %s" % test_id, 
+                source = "hola!",
+                tags   = global_tag 
+            ).save(verbose=global_verbose)
+            new_pages = Page.list(auth, verbose=global_verbose)
+            if test_page_object:
+                assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
+            _okay()
 
-        # PUT page: edit the page
-        _starting("test page.save() UPDATE ..")
-        page.source = "modified"
-        page.save(verbose=global_verbose)
-        refetch = Page(auth, id=page.id).get(verbose=global_verbose)
-        assert_that(refetch.source, contains_string("modified"))
-        _okay()
+        if test_page_object:
+            # PUT page: edit the page
+            _starting("test page.save() UPDATE ..")
+            page.source = "modified"
+            page.save(verbose=global_verbose)
+            refetch = Page(auth, id=page.id).get(verbose=global_verbose)
+            assert_that(refetch.source, contains_string("modified"))
+            _okay()
 
         # test other resources
         if test_attachment_object:     self._test_attachment_object(page)
@@ -266,13 +277,15 @@ class IntegrationTestCase(unittest.TestCase):
         if test_lock_object:           self._test_lock_object(page)
         if test_revision_object:       self._test_revision_object(page)
 
-        # DELETE page:   delete page                                  
-        _starting("test page.delete() DELETE ..")
-        page.delete(verbose=global_verbose)
-        should_raise(SpringnoteError.Response, 
-            lambda: Page(auth, id=page.id).get(verbose=global_verbose)
-        )
-        _okay()
+        # you need this to test other resources
+        if True:
+            # DELETE page:   delete page                                  
+            _starting("test page.delete() DELETE ..")
+            page.delete(verbose=global_verbose)
+            should_raise(SpringnoteError.Response, 
+                lambda: Page(auth, id=page.id).get(verbose=global_verbose)
+            )
+            _okay()
         
     def _test_attachment_object(self, page):
         # LIST attachment - count 0
@@ -296,10 +309,6 @@ class IntegrationTestCase(unittest.TestCase):
 
         # PUT attachment
         _starting("test Attachment.upload() UPDATE ..")
-        class File:     # simple file object
-            def __init__(self, name, content):
-                self.name = name
-                self.read = lambda: content
         attach.file = File('tmp2', 'CONTENT!')
         attach.upload(verbose=global_verbose)
         assert_that(attach.id          , is_(prev_attach_rsrc["identifier"]))
@@ -366,61 +375,106 @@ class IntegrationTestCase(unittest.TestCase):
         _okay()
 
     def _test_sugar_methods(self, sn):
-        if test_page_sugar_methods: self._test_page_sugar_methods(sn)
+        self._test_page_sugar_methods(sn)
 
     def _test_page_sugar_methods(self, sn):
-        _starting("test sn.list_pages() ..")
-        pages = sn.list_pages(verbose=global_verbose)
-        _printout("%d pages" % len(pages))
-        
-        # LIST page with options
-        last_modified = sorted(pages, \
-            cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
-        most_recent = sn.list_pages(sort="date_modified", order="desc", count=1,
-                        verbose=global_verbose)[0]
-        for attr in ["identifier", "title", "source", "date_modified"]:
-            last_modified_attr = getattr(last_modified, attr)
-            most_recent_attr   = getattr(most_recent, attr)
-            assert_that(last_modified_attr, is_(equal_to(most_recent_attr)))
-        _okay()
+        if test_page_sugar_methods:
+            _starting("test sn.list_pages() ..")
+            pages = sn.list_pages(verbose=global_verbose)
+            _printout("%d pages" % len(pages))
+            
+            # LIST page with options
+            last_modified = sorted(pages, \
+                cmp=lambda x,y: cmp(x.date_modified, y.date_modified))[-1]
+            most_recent = sn.list_pages(sort="date_modified", order="desc", count=1,
+                            verbose=global_verbose)[0]
+            for attr in ["identifier", "title", "source", "date_modified"]:
+                last_modified_attr = getattr(last_modified, attr)
+                most_recent_attr   = getattr(most_recent, attr)
+                assert_that(last_modified_attr, is_(equal_to(most_recent_attr)))
+            _okay()
 
-        # GET page: get most recently modified page
-        _starting("test sn.get_page() READ ..")
-        page = sn.get_page(id=last_modified.id, verbose=global_verbose)
-        assert_that(page.title, is_(equal_to(last_modified.title)))
-        _okay()
+            # GET page: get most recently modified page
+            _starting("test sn.get_page() READ ..")
+            page = sn.get_page(id=last_modified.id, verbose=global_verbose)
+            assert_that(page.title, is_(equal_to(last_modified.title)))
+            _okay()
 
-        # POST page: create a page
-        _starting("test sn.save_page() CREATE ..")
-        page = sn.save_page(title   = "POST test for %s" % test_id, 
-                            source  = "hola!",
-                            tags    = global_tag,
-                            verbose =global_verbose)
-        new_pages = sn.list_pages(verbose=global_verbose)
-        assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
-        _okay()
+        # you need this to test other resources
+        if True:
+            # POST page: create a page
+            _starting("test sn.save_page() CREATE ..")
+            page = sn.save_page(title   = "POST test for %s" % test_id, 
+                                source  = "hola!",
+                                tags    = global_tag,
+                                verbose =global_verbose)
+            new_pages = sn.list_pages(verbose=global_verbose)
+            if test_page_sugar_methods:
+                assert_that(len(pages) +1, is_(equal_to(len(new_pages))))
+            _okay()
 
-        # PUT page: edit the page
-        _starting("test sn.save_page() UPDATE ..")
-        page.source = "modified"
-        sn.save_page(id=page.id, source=page.source, verbose=global_verbose)
-        refetch = sn.get_page(id=page.id, verbose=global_verbose)
-        assert_that(refetch.source, contains_string("modified"))
-        _okay()
+        if test_page_sugar_methods:
+            # PUT page: edit the page
+            _starting("test sn.save_page() UPDATE ..")
+            page.source = "modified"
+            sn.save_page(id=page.id, source=page.source, verbose=global_verbose)
+            refetch = sn.get_page(id=page.id, verbose=global_verbose)
+            assert_that(refetch.source, contains_string("modified"))
+            _okay()
 
-        ## test other resources
-        #if test_attachment_object:     self._test_attachment_object(page)
+        # test other resources
+        if test_attachment_sugar_methods: self._test_attachment_sugar_methods(page)
         #if test_comment_object:        self._test_comment_object(page)
         #if test_collaboration_object:  self._test_collaboration_object(page)
         #if test_lock_object:           self._test_lock_object(page)
         #if test_revision_object:       self._test_revision_object(page)
 
-        # DELETE page:   delete page                                  
-        _starting("test sn.delete_page() DELETE ..")
-        sn.delete_page(id=page.id, verbose=global_verbose)
-        should_raise(SpringnoteError.Response, 
-            lambda: sn.get_page(id=page.id, verbose=global_verbose)
-        )
+        # you need this to test other resources
+        if True:
+            # DELETE page:   delete page                                  
+            _starting("test sn.delete_page() DELETE ..")
+            sn.delete_page(id=page.id, verbose=global_verbose)
+            should_raise(SpringnoteError.Response, 
+                lambda: sn.get_page(id=page.id, verbose=global_verbose)
+            )
+            _okay()
+
+    def _test_attachment_sugar_methods(self, page):
+        # LIST attachment - count 0
+        attaches = page.list_attachments(verbose=global_verbose)
+        assert_that(len(attaches), is_(0))
+
+        # POST attachment
+        _starting("test page.upload_attachment() CREATE ..")
+        data = open(__file__, 'rb') # i shall sacrifice myself for testing!
+        attach = page.upload_attachment(file=data, verbose=global_verbose)
+        data.close()
+        assert_that(attach.date_created, is_not(None))
+        prev_attach_rsrc = attach.resource
+        # LIST attachment - count 1
+        attaches = page.list_attachments(verbose=global_verbose)
+        assert_that(len(attaches), is_(1))
+        assert_that(attaches[0].id, is_(attach.id))
+        _okay()
+
+        # PUT attachment
+        _starting("test upload_attachment() UPDATE ..")
+        attach.file = File('tmp2', 'CONTENT!')
+        page.upload_attachment(id=attach.id, file=attach.file, verbose=global_verbose)
+        assert_that(attach.id          , is_(prev_attach_rsrc["identifier"]))
+        assert_that(attach.date_created, is_(prev_attach_rsrc["date_created"]))
+        assert_that(attach.title       , is_not(prev_attach_rsrc["title"]))
+        assert_that(attach.description , is_not(prev_attach_rsrc["description"]))
+        _okay()
+        
+        # DELETE attachment
+        _starting("test page.delete_attachment() ..")
+        page.delete_attachment(id=attach.id, verbose=global_verbose)
+        # LIST attachment - count 0
+        attaches = page.list_attachments(verbose=global_verbose)
+        assert_that(len(attaches), is_(0))
+        _okay()
+        _starting("test page.list_attachments() ..")
         _okay()
 
 
