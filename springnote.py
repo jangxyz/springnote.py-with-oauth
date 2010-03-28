@@ -633,6 +633,16 @@ class Page(SpringnoteResource):
         kwarg.update(q=query)
         return cls.list(auth, note=note, verbose=verbose, **kwarg)
 
+    @classmethod
+    def get_root(cls, auth, note=None, verbose=None):
+        ''' get root page. uses list() method
+        
+        NOTE: not all attributes are loaded, only the following are:
+            [title, relation_is_part_of, uri, identifier, date_modified]
+        '''
+        pages = cls.list(auth, note=note, verbose=verbose)
+        root_page = filter(lambda p: p.relation_is_part_of is None, pages)[0]
+        return root_page
 
 class Attachment(SpringnoteResource):
     springnote_attributes = [ 
