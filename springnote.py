@@ -111,9 +111,11 @@ def run_resource_method(parent, function_name, *args, **kwarg):
 
     # find and run
     verbose = kwarg.pop('verbose', None)
-    method = getattr(resource_object, method_name)
+    method  = getattr(resource_object, method_name)
+
     # instance method
-    if method.im_class is resource_object:
+    #if method.im_class is resource_object:
+    if method.im_self is None:
         instance = resource_object(parent, *args, **kwarg)
         method   = getattr(instance, method_name)
         return method(verbose=verbose)
@@ -751,7 +753,8 @@ class Attachment(SpringnoteResource):
     ]
     def __init__(self, parent, id=None, filename=None, file=None, auth=None):
         SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
-        self.id, self.relation_is_part_of = id, parent.id
+        self.id = id
+        self.relation_is_part_of = parent.id
 
         # file attributes
         self.title = filename
@@ -903,7 +906,7 @@ class Revision(SpringnoteResource):
         "source",              # 페이지 내용          -- only at get()
         "description",         # 히스토리에 대한 설명 -- only at list()
     ]
-    def __init__(self, parent, auth=None, id=None):
+    def __init__(self, parent, id=None, auth=None):
         SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.id = id
         self.relation_is_part_of = parent.id

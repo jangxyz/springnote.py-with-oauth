@@ -1,0 +1,388 @@
+h1. 자세한 사용법
+
+h2. 리소스 종류
+
+기본적으로 편집하는 Page와 그 안에 딸려 있는 Attachment, Comment, Revision, Lock, Collaboration이 있습니다.
+
+* Page: 가장 많이 쓰일 페이지.
+* Attachment: 페이지에 달려 있는 첨부파일. 업로드하거나 다운로드 할 수 있습니다. 
+* Comment: 페이지에 달린 댓글. list만 가능합니다.
+* Revision: 페이지의 매 버전. 읽기만 됩니다.
+* Lock: 페이지 작성하는 동안 다른 사람이 편집하지 못하도로 잠금 
+* Collaboration: 페이지를 같이 편집할 권한이 있는 사람 목록. 읽기만 됩니다. 
+
+각 리소스에 있는 attribute은 멤버 변수로 정의돼 있습니다. 
+어떤 attribute가 있는지는 Page.springnote_attributes 등을 통해 확인할 수 있습니다.
+더 자세한 내용은 "스프링노트 개발자 문서":http://dev.springnote.com/ 를 참고하세요.
+
+이 외에도 raw, resource 등의 멤버 변수가 있습니다.
+* raw: springnote.com으로부터 받은 응답 내용. 궁금하면 들여다 보세요.
+* resource: raw를 가공한 dictionary
+
+모든 리소스 요청에는 access token등의 인증 정보가 필요하기 때문에, Springnote 객체나 리소스 객체를 생성시에 넘겨주어야 합니다.
+
+h2. Page 리소스
+
+<pre><code>
+__init__(self, auth, id=None, note=None, title=None, source=None, relation_is_part_of=None, tags=None, parent=None)
+
+springnote_attributes = [ 
+       "identifier",           # 페이지 고유 ID  예) 2
+       "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
+       "date_modified",        # 페이지 최종 수정 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
+       "rights",               # 페이지에 설정된 Creative Commons License  예) by-nc
+       "creator",              # 페이지 소유자 OpenID
+       "contributor_modified", # 최종 수정자 OpenID
+       "title",                # 페이지 이름  예) TestPage
+       "source",               # 페이지 원본  예) <p>hello</p>
+       "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
+       "tags"                  # 페이지에 붙은 태그  예) tag1,tag2
+]
+</code></pre>
+
+객체를 생성할 때에는 springnote.com에 아무런 요청을 하지 않습니다.
+생성한 객체를 가지고 get이나 save등의 메소드를 호출하면 springnote.com에 요청해서 필요한 작업이 수행됩니다.
+
+<pre><code>
+page = Page(sn, title="아직 저장 안됨", tags="검토중")
+page.save()        # 요청!
+</code></pre>
+
+여러개의 Page를 반환하는 메소드는 인스턴스가 아니라 클래스에서 호출해 줍니다.
+
+<pre><code>
+lot_of_pages = Page.list(sn, tags="검토중")
+</code></pre>
+
+지원하는 요청: get, save, delete, list, search, get_root, get_parent, get_children
+
+h3. 생성 (save)
+
+id가 없으면 새 리소스를 생성합니다.
+
+<pre><code>
+new_page = Page(sn, title="새로 만드는 페이지", source="냉무", tags="test")
+new_page.id     # None
+new_page.save()
+new_page.id     # id값이 들어 있어요
+</code></pre>
+
+h3. 읽기 (get)
+
+id에 해당하는 리소스를 받아 옵니다.
+
+<pre><code>
+page = Page(sn, id=563954)
+page.get()
+</code></pre>
+
+h3. 수정 (save)
+
+id가 있으면 해당 리소스를 수정합니다.
+
+<pre><code>
+page = Page(sn, id=563954).get()
+page.title  = "코펜하겐 기후 변화가 동아시아 경제에 미치는 영향"
+page.source = "심각합니다."
+page.tags   = "썰렁유머"
+page.save()
+</code></pre>
+
+h3. 삭제 (delete)
+
+id에 해당하는 리소스를 삭제합니다.
+
+<pre><code>
+worthless_page = Page.list(sn, tags="썰렁유머")[0]
+worthless_page.delete()
+</code></pre>
+
+h3. 리스트 (list)
+
+주어진 조건에 맞는 모든 page를 가져옵니다. 페이지의 모든 정보를 가져오는 것이 아니라
+title, relation_is_part_of, uri, identifier, date_modified만 가져 옵니다. 
+(Page 인스턴스가 아닌 클래스 메소드인 것에 주의하세요)
+
+<pre><code>
+all_pages = Page.list(sn, sort=date_modified, order=desc, count=10, offset=3, q="테스트", tags="test")
+all_pages[0].source is None # 본문은 들어 있지 않아요.
+</code></pre>
+
+h3. 있어도 그만, 없어도 그만인 메소드
+
+간단히 다른 메소드를 이용하는 것들인데, 편의상 넣었습니다.
+
+* search 
+query 인자를 꼭 명시해야 한다는 사실 외엔 list와 완전히 동일합니다.
+
+<pre><code>
+pages_with_same_title  = Page.search(sn, "아무도 안 쓸 것 같은 제목")
+pages_with_same_result = Page.list(sn, q="아무도 안 쓸 것 같은 제목")
+</code></pre>
+
+* get_root
+노트의 최상위 페이지를 가져옵니다.
+list 메소드를 이용하기 때문에 source 등의 정보는 없습니다.
+
+<pre><code>
+root = Page.get_root(sn, note='jangxyz')
+root.relation_is_part_of is None # 최상위는 상위 페이지가 없습니다.
+root.source is None
+</code></pre>
+
+* get_parent
+상위 페이지를 가져옵니다. 이미 최상위이면 None을 반환합니다.
+
+<pre><code>
+page = Page(sn, id=563954).get()
+parent_page = page.get_parent() # Page(sn, id=page.relation_is_part_of).get()
+page.parent is parent_page
+</code></pre>
+
+* get_children
+하위 페이지를 가져옵니다. 
+역시 list 메소드를 이용하기 때문에 source 등의 정보는 없습니다.
+
+<pre><code>
+page = Page(sn, id=563954)
+children_pages = page.get_children() # Page.list(sn, parent_id=page.id)
+children_pages[0].source is None
+</code></pre>
+
+h3. Springnote 객체를 이용한 접근
+
+Page 객체를 이용한 접근도 좋지만, 언제나 인증 정보를 갖고 시작해야 하기 때문에
+편의상 Springnote 객체에서 바로 호출할 수 있도록 했습니다.
+여러개의 page를 반환하는 클래스 메소드는 “메소드_pages”식으로 호출한다는 점에 유의하세요.
+
+<pre><code>
+sn = Springnote(access_token=('ACCESS_KEY', 'SECRET'))
+
+# sn.list_pages는 Page.list(sn)와 사실 같습니다.
+pages = sn.list_pages(q="아무도 안 쓸 것 같은 제목")
+pages[0].title = "다른 제목"
+pages[0].save()
+
+# sn.save_page는 Page(sn).save()와 동일합니다.
+new_page = sn.save_page(title="새 페이지", source="새 술은 새 부대에")
+</code></pre>
+
+h2. Attachment 리소스 
+
+<pre><code>
+__init__(self, parent, id=None, filename=None, file=None, auth=None)
+
+springnote_attributes = [ 
+    "identifier",          # 첨부 고유 ID 예) 2
+    "title",               # 첨부 파일 이름 예) test.jpg
+    "description",         # 첨부 파일 크기(단위는 바이트) 예) 8000
+    "date_created",        # 첨부 최초 생성 일시(UTC) 예) 2008-01-30T10:11:16Z
+    "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
+]</code></pre>
+
+첨부 파일을 읽거나 쓸 수 있습니다. 인증 정보는 Springnote 객체를 넘겨줘도 되지만 page만 넘겨줘도 충분합니다.
+
+지원하는 요청: get, upload, download, delete, list
+
+h3. 모든 첨부 파일 정보 보기 (list)
+
+개별 첨부 파일의 id를 알아야 접근할 수 있기 때문에, 보통 page의 모든 첨부 파일 정보를 보는 것에서 시작합니다.
+파일이름, 크기, 생성 날짜 등의 메타 정보를 받아옵니다. 
+
+<pre><code>
+page = sn.get_page(id=563954)
+attachments = Attachment.list(page)
+attachments[0].relation_is_part_of  # page.id
+attachments[0].title                # 파일이름이 들어 있어요
+attachments[0].description          # 파일크기가 들어 있어요
+</code></pre>
+
+h3. 개별 파일 정보 보기 (get)
+
+개별 파일의 메타 정보를 볼 수 있는데, list 메소드에 비해서 더 많이 보여주진 않습니다.
+
+<pre><code>
+attach = Attachment(id=559756).get()
+</code></pre>
+
+h3. 첨부 파일 내려 받기 (download)
+
+파일 내용 자체를 내려 받습니다. 메타 정보가 없기 때문에 파일이름은 알 수 없습니다.
+
+<pre><code>
+attach = Attachment(page, id=some_id).download()
+attach.raw              # 파일내용이 들어 있어요
+attach.title is None    # 파일이름 없이 어디다 쓰라고?
+attach.get()            # 메타 정보를 받아옵니다.
+
+# 이렇게 하면 저장할 수 있습니다.
+f = open(attach.title, 'wb')
+f.write(attach.raw)
+f.close()
+</code></pre>
+
+h3. 파일 첨부하기 (upload)
+
+파일을 업로드합니다. file에 file object를 넣어주면 됩니다. 
+filename을 따로 써주면 file에 있는 이름 대신 사용합니다.
+page와 마찬가지로 id가 없으면 새로 생성하고, 있으면 기존 것을 수정합니다.
+
+<pre><code>
+# 새 파일 첨부
+page   = sn.get_page(id=559756)
+attach = Attachment(page, file=some_file_object, filename="new_file")
+attach.save()
+
+# 기존 파일 수정
+attach.filename = "different_filename"
+attach.save()
+</code></pre>
+
+h3. 첨부 파일 삭제 (delete)
+
+파일을 삭제합니다. 복구할 수 없으니 조심해서 사용하세요. 
+
+<pre><code>
+attach = Attachment(page, file=some_file_object, filename="new_file")
+attach.save()
+attach.delete()     # 이제 없어요
+</code></pre>
+
+h3. Page 객체를 이용한 접근
+
+Page에서와 마찬가지로, Attachment 객체 대신 Page 객체를 이용해서 바로 접근할 수 있습니다. 
+
+<pre><code>
+# Attachment.list(page)와 동일합니다.
+attachments = page.list_attachments() 
+attach = filter(lambda x: x.title == "thisfile.txt", attachments)
+attach.download()
+
+# Attachment(page).save(file=f)와 동일합니다.
+f = open(some_filename)
+attach = page.upload_attachment(file=f)
+</code></pre>
+
+h2. Comment 리소스
+
+<pre><code>
+__init__(self, auth, parent=None)
+
+springnote_attributes = [ 
+    "identifier",          # 고유 ID 예) 1
+    "date_created",        # 최초 생성 일시(UTC)예) 2008-01-30T10:11:16Z
+    "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
+    "creator",             # 작성자 nickname
+    "source",              # 내용
+]</code></pre>
+
+페이지에 달린 댓글의 목록을 가져옵니다. 그 이상 없습니다.
+
+지원하는 요청: list
+
+h3. 댓글 보기 (list)
+
+<pre><code>
+comments = page.get_comments()</code></pre>
+
+h2. Revision 리소스
+
+<pre><code>
+__init__(self, parent, auth=None, id=None)
+
+springnote_attributes = [ 
+    "identifier",          # 히스토리 고유 ID
+    "creator",             # 만든 사람 OpenID
+    "date_created",        # 생성된 시간(UTC) 예) 2008-01-30T10:11:16Z
+    "relation_is_part_of", # 히스토리가 속한 페이지의 ID
+    "source",              # 페이지 내용          -- only at get()
+    "description",         # 히스토리에 대한 설명 -- only at list()
+]</code></pre>
+
+페이지의 버전별 정보가 들어 있습니다. 역사는 고칠 수 없기 때문에 읽기 전용이고, 클래스 메소드인 list와 인스턴스 메소드 get만 있습니다.
+모든 정보가 들어있진 않고, 생성시각, 상위 페이지, 페이지 내용 정도가 들어 있습니다. 페이지 제목은 없어요.
+
+마찬가지로 page 객체로 바로 접근 가능합니다.
+
+지원하는 요청: get, list
+
+h3. 페이지의 모든 리비전 보기 (list)
+
+페이지 인스턴스의 모든 리비전을 가져옵니다. source는 들어 있지 않습니다. 사용자의 변경 이력 뿐 아니라 페이지 생성, 첨부 파일 삭제 등의 정보도 남습니다. description을 확인해보세요.
+
+<pre><code>
+revs = Revision.list(page)
+revs = sorted(revs, cmp=lambda x: x.date_created) # 정렬!
+revs[0].description    # 생성되었습니다, 따위의 설명이 있어요. 
+</code></pre>
+
+h3. 한 리비전 보기 (get)
+
+정확하게 과거의 한 때로 돌아갑니다. 변경 이력 description은 없지만, 대신 source를 직접 확인해볼 수 있습니다. revision의 id를 알아야 합니다.
+
+<pre><code>
+revs = Revision.list(page)
+rev  = Revision(revs[-3].id).get()
+page.source = rev.source    # 과거 내용으로 덮어씀
+page.save()                 # 어이쿠!
+
+# 순서로 가져올 수가 없어서 조금 불편하네요;
+page.get_revision(id=revs[-3].id)
+</code></pre>
+
+h2. Lock 리소스
+
+<pre><code>
+__init__(self, parent, auth=None)
+
+springnote_attributes = [ 
+    "creator",             # 현재 페이지를 수정중인 사용자 OpenID
+    "date_expired",        # 잠금이 해제되는 (예상) 시간(UTC) 예) 2008-01-30T10:11:16Z
+    "relation_is_part_of", # 잠금 리소스가 속한 페이지의 ID
+]</code></pre>
+
+여러 명이 동시에 한 페이지를 편집하는 것을 막기 위해, 편집하는 사람이 페이지를 잠그고 있습니다. 편집이 더 이상 이뤄지지 않으면 일정시간 내에 lock은 자동 반환됩니다. 혼자 사용할 때는 신경 쓸 일이 없어요. 
+
+지원하는 요청: get, acquire
+
+h3. 잠금 상태 확인 (get)
+
+현재 페이지가 잠겨 있는지, 있다면 언제쯤 해제 되는지 살펴볼 수 있습니다.
+잠겨 있지 않다면 date_expired는 None입니다.
+
+<pre><code>
+lock = Lock.get(page)
+</code></pre>
+
+h3. 잠금 요청 (acquire)
+
+페이지 잠그기를 요청합니다. 보통 페이지 수정을 하면 자동으로 잠궈지기 때문에 일부러 호출할 필요는 없습니다.
+
+<pre><code>
+lock = page.acquire_lock()
+lock.date_expired is not None
+</code></pre>
+
+h2. Collaboration
+
+<pre><code>
+__init__(self, parent, auth=None)
+
+springnote_attributes = [ 
+    "rights_holder", # 협업자의 OpenID
+    "access_rights", # 협업자가 가진 권한 예) reader, writer, guest, creator
+    "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
+]</code></pre>
+
+한 페이지를 여럿이 편집하고 있을 때, 협업자의 목록을 보여줍니다. 
+
+지원하는 요청: list
+
+h3. 협업자 목록 보기 (list)
+
+<pre><code>
+collabs = Collaboration.list(page)
+for someone in collabs:
+   print "[%s] %s %s joined" % (x.date_created, x.access_rights, x.rights_holder)
+</code></pre>
+

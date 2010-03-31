@@ -274,7 +274,8 @@ class SpringnoteBlackMagicTestCase(unittest.TestCase):
 
         # test springnote.Page()
         should_call_method(springnote.Page, 'list', when=run, 
-            arg = with_at_least(eq(self.sn)), method_type=staticmethod)
+            arg = with_at_least(eq(springnote.Page), eq(self.sn)), 
+			method_type=classmethod)
 
 if __name__ == '__main__':
     unittest.main()

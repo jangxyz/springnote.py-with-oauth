@@ -17,7 +17,7 @@ import springnote
 class IsCalled(Exception): 
     pass
 def should_call_class(object, class_name, when, arg=None):
-    callable = when
+    run = when
     called = []
     class Calling():
         def __init__(self, *args, **kwarg):
@@ -38,6 +38,7 @@ def should_call_class(object, class_name, when, arg=None):
 
     # patch
     setattr(object, class_name, Calling)
+    #getattr(object, class_name).__name__ = class_name
     for attr in dir(orig):
         if attr.startswith('__'): continue
         the_class = getattr(object, class_name) 
@@ -46,7 +47,7 @@ def should_call_class(object, class_name, when, arg=None):
 
     # test
     try:                # run
-        callable()
+        run()
         if isinstance(arg, pmock.AbstractArgumentsMatcher):
             msg = "\n".join(map(str, called)) + "\nhave been called, but " \
                 "method %s(%s) is not called" % (class_name, arg)

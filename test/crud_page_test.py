@@ -360,7 +360,7 @@ class PageRequestTestCase(unittest.TestCase):
     def list_method_calls_set_path_params(self):
         ''' Page.list() calls _set_path_params() '''
         should_call_method(springnote.Page, '_set_path_params', 
-            lambda: springnote.Page.list(self.auth, note='jangxyz'), staticmethod
+            lambda: springnote.Page.list(self.auth, note='jangxyz'), classmethod
         )
 
     @unittest.test
@@ -679,11 +679,11 @@ class PageBlackMagicTestCase(unittest.TestCase):
         verbose   = True
 
         run  = lambda: self.page.upload_attachment(id, filename=filename, file=file, verbose=verbose)
-        # springnote.Attachment(page, id=123)
+        # test springnote.Attachment(page, id=123)
         should_call_class(springnote, 'Attachment', when=run, 
                             arg = with_(eq(self.page), eq(id),
                                         filename=eq(filename), file=eq(file)))
-        # springnote.Attachment().get(verbose=True)
+        # test springnote.Attachment().get(verbose=True)
         should_call_method(springnote.Attachment, 'upload', when=run, 
                             arg = with_at_least(verbose=eq(verbose)))
 
@@ -694,7 +694,8 @@ class PageBlackMagicTestCase(unittest.TestCase):
         page = Mock()
 
         should_call_method(springnote.Attachment, 'list', when=run, 
-            arg = with_at_least(eq(self.page)), method_type=staticmethod)
+            arg = with_at_least(eq(springnote.Attachment), eq(self.page)), 
+            method_type=classmethod)
 
 
 if __name__ == '__main__':
