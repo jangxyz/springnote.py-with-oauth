@@ -38,7 +38,6 @@ def should_call_class(object, class_name, when, arg=None):
 
     # patch
     setattr(object, class_name, Calling)
-    #getattr(object, class_name).__name__ = class_name
     for attr in dir(orig):
         if attr.startswith('__'): continue
         the_class = getattr(object, class_name) 

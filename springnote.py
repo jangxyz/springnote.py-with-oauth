@@ -91,40 +91,45 @@ def is_file_type(data):
     return False
 
 # black-and-white magic 
-def run_resource_method(parent, function_name, *args, **kwarg):
-    ''' detach function_name and call approriate resource.method(parent)
+def register_request_methods(parent, *children):
+    ''' binds request methods from children resources to the parent resource.
+
+    read request methods from children resources, and
+    generate a 'request_resource' style method and bind it to the parent resource.
 
     examples:
-     * (parent=page, function_name='get_attachment')           => Attachment(page).get()
-     * (parent=sn,   function_name='list_pages', verbose=True) => Page.list(sn, verbose=True)
+     * page.get_attachment()       calls Attachment(page).get()
+     * sn.list_pages(verbose=True) calls Page.list(sn, verbose=True)
     '''
-    if '_' not in function_name: 
-        raise AttributeError("name '%s' is not defined" % function_name)
+    def generate_method(method_name, resource, method):
+        return lambda parent, *args, **kwarg: \
+                    run_resource_method(parent, method_name, resource, method, 
+                                            *args, **kwarg)
 
-    # find (rseource_object, method_name)
-    method_name, resource_name = function_name.rsplit('_', 1)
-    resource_name = resource_name[0].upper() + resource_name[1:].rstrip('s')
-    if resource_name in globals():  
-        resource_object = globals()[resource_name]
-    else:   
-        raise AttributeError("name '%s' is not defined" % resource_name)
+    def run_resource_method(parent, function_name, resource, method_name, *args, **kwarg):
+        ''' detach function_name and call approriate resource.method(parent) '''
+        method  = getattr(resource, method_name)
+        verbose = kwarg.pop('verbose', None)
+        if method.im_self is None:      # instance method
+            instance = resource(parent, *args, **kwarg)
+            method   = getattr(instance, method_name)
+            return method(verbose=verbose)
+        else:                           # class method
+            method = getattr(resource, method_name)
+            return method(parent, verbose=verbose, *args, **kwarg)
 
-    # find and run
-    verbose = kwarg.pop('verbose', None)
-    method  = getattr(resource_object, method_name)
+    #
+    for child in children:                              # eg, Attachment
+        for request_method in child.request_methods:    # eg, 'download'
+            method_name = request_method + "_" + child.__name__.lower()
+            # add 's' suffix to classmethods. eg, 'list_attachments'
+            if getattr(child, request_method).im_self:
+                method_name += "s"
 
-    # instance method
-    #if method.im_class is resource_object:
-    if method.im_self is None:
-        instance = resource_object(parent, *args, **kwarg)
-        method   = getattr(instance, method_name)
-        return method(verbose=verbose)
-    # class method
-    else:
-        method = getattr(resource_object, method_name)
-        return method(parent, verbose=verbose, *args, **kwarg)
-def register_sugar_method(method_name):
-    return lambda parent, *args, **kwarg: run_resource_method(parent, method_name, *args, **kwarg)
+            method = generate_method(method_name, child, request_method)
+            setattr(parent, method_name, method)        # Page.list_attachments
+            setattr(method, '__name__', method_name)    # Page.list_atatchments.__name__
+
 
 class Springnote(object):
     ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
@@ -317,20 +322,14 @@ class Springnote(object):
                 return oauth.OAuthToken(args[0].key, args[0].secret)
         return
 
-    # define sugar methods
-    for method_name in [
-        'get_page', 'save_page', 'delete_page', 'list_pages', 
-        'search_pages', 'get_root_page', 'get_parent_page', 'get_children_pages',
-        ]:
-            locals()[method_name] = register_sugar_method(method_name)
-            locals()[method_name].__name__ = method_name
-    del method_name
-
+##
 ## -- OOP layer
+##
 class SpringnoteResource(object):
     """ springnote에서 사용하는 리소스의 부모 클래스. 
         Page, Attachment 등이 이 클래스를 상속합니다 """
-    springnote_attributes = [] # 각 리소스가 사용하는 attribute
+    springnote_attributes = []            # springnote attributes for each resource
+    request_methods       = ['request']   # request methods for each resource
 
     def __init__(self, auth, parent=None):
         self.auth     = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
@@ -588,6 +587,9 @@ class Page(SpringnoteResource):
         'tags'     : lambda x: types.UnicodeType(x),
         'identifiers': lambda x: re.match("([0-9]+,)*[0-9]+", x).group(0), 
     }
+    request_methods = ['get', 'save', 'delete', 'list', 
+        'search', 'get_root', 'get_parent', 'get_children',
+    ]
     # sugar methods for attachment
     subresource_method_names = [
         # attachment
@@ -736,11 +738,12 @@ class Page(SpringnoteResource):
             page.parent = self
         return children
     
-    # define sugar methods
-    for method_name in subresource_method_names:
-        locals()[method_name] = register_sugar_method(method_name)
-        locals()[method_name].__name__ = method_name
-    del method_name
+    ## define sugar methods
+    #for method_name in subresource_method_names:
+    #    locals()[method_name] = generate_method(method_name)
+    #    locals()[method_name].__name__ = method_name
+    #    del method_name
+#register_methods(Page, Page.subresource_method_names)
 
 
 class Attachment(SpringnoteResource):
@@ -751,6 +754,7 @@ class Attachment(SpringnoteResource):
         "date_created",        # 첨부 최초 생성 일시(UTC) 예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
     ]
+    request_methods = ['list', 'get', 'upload', 'download', 'delete']
     def __init__(self, parent, id=None, filename=None, file=None, auth=None):
         SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.id = id
@@ -853,6 +857,7 @@ class Comment(SpringnoteResource):
         "creator",             # 작성자 nickname
         "source",              # 내용
     ]
+    request_methods = ['list']
 
     @classmethod
     def list(cls, page, auth=None, verbose=None):
@@ -867,6 +872,8 @@ class Collaboration(SpringnoteResource):
         "access_rights", # 협업자가 가진 권한 예) reader, writer, guest, creator
         "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
     ]
+    request_methods = ['list']
+
     @classmethod
     def list(cls, page, auth=None, verbose=None):
         path, params = cls._set_path_params(page, plural=False)
@@ -880,6 +887,8 @@ class Lock(SpringnoteResource):
         "date_expired",        # 잠금이 해제되는 (예상) 시간(UTC) 예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 잠금 리소스가 속한 페이지의 ID
     ]
+    request_methods = ['get', 'acquire']
+
     def __init__(self, parent, auth=None):
         SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.relation_is_part_of = parent.id
@@ -906,6 +915,8 @@ class Revision(SpringnoteResource):
         "source",              # 페이지 내용          -- only at get()
         "description",         # 히스토리에 대한 설명 -- only at list()
     ]
+    request_methods = ['get', 'list']
+
     def __init__(self, parent, id=None, auth=None):
         SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.id = id
@@ -926,3 +937,6 @@ class Revision(SpringnoteResource):
         path, params = self._set_path_params(self.parent, id=self.id)
         return self.request(path, "GET", params, verbose=verbose)
 
+# bind request methods to parent resource
+register_request_methods(Springnote, Page)
+register_request_methods(Page, Attachment, Comment, Lock, Revision, Collaboration)

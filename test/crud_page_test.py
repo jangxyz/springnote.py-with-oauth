@@ -660,9 +660,9 @@ class PageBlackMagicTestCase(unittest.TestCase):
         verbose = True
 
         run  = lambda: self.page.get_attachment(id=id, verbose=verbose)
-        # springnote.Attachment(page, id=123)
-        should_call_class(springnote, 'Attachment', when=run, 
-                                arg=with_(eq(self.page), id=eq(id)))
+        ## springnote.Attachment(page, id=123)
+        #should_call_class(springnote, 'Attachment', when=run, 
+        #                        arg=with_(eq(self.page), id=eq(id)))
         # springnote.Attachment.get(verbose=True)
         should_call_method(springnote.Attachment, 'get', when=run, 
                                 arg=with_at_least(verbose=eq(verbose)))
@@ -679,10 +679,10 @@ class PageBlackMagicTestCase(unittest.TestCase):
         verbose   = True
 
         run  = lambda: self.page.upload_attachment(id, filename=filename, file=file, verbose=verbose)
-        # test springnote.Attachment(page, id=123)
-        should_call_class(springnote, 'Attachment', when=run, 
-                            arg = with_(eq(self.page), eq(id),
-                                        filename=eq(filename), file=eq(file)))
+        ## test springnote.Attachment(page, id=123)
+        #should_call_class(springnote, 'Attachment', when=run, 
+        #                    arg = with_(eq(self.page), eq(id),
+        #                                filename=eq(filename), file=eq(file)))
         # test springnote.Attachment().get(verbose=True)
         should_call_method(springnote.Attachment, 'upload', when=run, 
                             arg = with_at_least(verbose=eq(verbose)))

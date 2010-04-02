@@ -3,12 +3,11 @@
 
 springnote_oauth.py는 [스프링노트 서비스](http://www.springnote.com/)를 이용하는 python library입니다.
 
-springnote 모듈을 import한 뒤,
-이전 것이든 새로 받은 것이든 access token과 consumer token을 
-넣고 필요한 요청을 날리면 됩니다.
+springnote 라이브러리를 이용해서 정당한 권한을 획득하면 [springnote.com](http://www.springnote.com)에 저장돼 있는 리소스에 마음껏 접근할 수가 있습니다.
+먼저 인증 과정을 거쳐서 접근 토큰(access token)을 얻은 뒤에 내가 작성한 페이지를 보거나 할 수 있습니다.
 
     from springnote import Springnote
-    sn = Springnote(consumer_token=('있으면넣고', '없으면디폴트'))
+    sn = Springnote(consumer_token=('key:있으면넣고', 'secret:없으면디폴트'))
 
 1. resource에 접근할 access token을 얻습니다.
    혹시 이전에 받은 것이 있다면 그것을 사용해도 괜찮습니다.
@@ -44,7 +43,6 @@ OAuth 인증 방식을 이용합니다.
 
 
 ## 리소스 요청하기
-더 자세한 사용법은 [usage]에서 볼 수 있습니다.
 
 * 몽땅 보여줘!
 
@@ -78,6 +76,7 @@ OAuth 인증 방식을 이용합니다.
         worthless_page = sn.list_page(tags="썰렁유머")[0]
         worthless_page.delete()
 
+[[자세한 사용법]]을 보면 더 많은 것을 알 수 있습니다.
 
  주의사항
 ==========
