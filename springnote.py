@@ -11,11 +11,11 @@ __email__   = "janghwan at gmail dot com"
 __version__ = 0.7
 
 import env 
-
 import oauth, sys, types, re, inspect
 import httplib, urllib, socket, os.path
 
-try: # import json in following order: simplejson -> json -> FAIL
+# try importing json: simplejson -> json -> FAIL
+try:
     import simplejson as json
 except ImportError:
     try:
@@ -74,9 +74,10 @@ class SpringnoteError:
             self.status = response.status
             self.error  = "%d %s: %s" % (response.status, status_name, errors)
 
-
-def is_verbose(is_verbose):
-    if (is_verbose is None and default_verbose is True) or is_verbose is True:
+def is_verbose(verbose):
+    if verbose is True:
+        return True
+    elif verbose is None and default_verbose is True:
         return True
     else:
         return False
@@ -85,59 +86,20 @@ def is_file_type(data):
     ''' needs data.name and data.read() to act as a file '''
     if not getattr(data, 'name', False):
         return False
-    #if getattr(data, 'read', False) and getattr(data.read, '__call__', False):
     if hasattr(data, 'read') and callable(data.read):
         return True
     return False
 
-# black-and-white magic 
-def register_request_methods(parent, *children):
-    ''' binds request methods from children resources to the parent resource.
-
-    read request methods from children resources, and
-    generate a 'request_resource' style method and bind it to the parent resource.
-
-    examples:
-     * page.get_attachment()       calls Attachment(page).get()
-     * sn.list_pages(verbose=True) calls Page.list(sn, verbose=True)
-    '''
-    def generate_method(method_name, resource, method):
-        return lambda parent, *args, **kwarg: \
-                    run_resource_method(parent, method_name, resource, method, 
-                                            *args, **kwarg)
-
-    def run_resource_method(parent, function_name, resource, method_name, *args, **kwarg):
-        ''' detach function_name and call approriate resource.method(parent) '''
-        method  = getattr(resource, method_name)
-        verbose = kwarg.pop('verbose', None)
-        if method.im_self is None:      # instance method
-            instance = resource(parent, *args, **kwarg)
-            method   = getattr(instance, method_name)
-            return method(verbose=verbose)
-        else:                           # class method
-            method = getattr(resource, method_name)
-            return method(parent, verbose=verbose, *args, **kwarg)
-
-    #
-    for child in children:                              # eg, Attachment
-        for request_method in child.request_methods:    # eg, 'download'
-            method_name = request_method + "_" + child.__name__.lower()
-            # add 's' suffix to classmethods. eg, 'list_attachments'
-            if getattr(child, request_method).im_self:
-                method_name += "s"
-
-            method = generate_method(method_name, child, request_method)
-            setattr(parent, method_name, method)        # Page.list_attachments
-            setattr(method, '__name__', method_name)    # Page.list_atatchments.__name__
-
 
 class Springnote(object):
     ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
-    signature_method = oauth.OAuthSignatureMethod_HMAC_SHA1()
-    BOUNDARY         = 'AaB03x' 
+    signature_method       = oauth.OAuthSignatureMethod_HMAC_SHA1()
+    BOUNDARY               = 'AaB03x' 
+    DEFAULT_CONTENT_TYPE   = 'application/json'
+    MULTIPART_CONTENT_TYPE = 'multipart/form-data; boundary=%s' % BOUNDARY
 
     def __init__(self, access_token=None, consumer_token=(DEFAULT_CONSUMER_TOKEN_KEY, DEFAULT_CONSUMER_TOKEN_SECRET), verbose=None):
-        """ consumer token을 초기화하고, 경우에 따라 access token도 있으면 
+        """ consumer token을 초기화하고, access token도 있으면 
         초기화해서 바로 사용할 수 있습니다.
         
          - consumer_token: 개발자가 정의하고 싶은 consumer token을 
@@ -152,98 +114,6 @@ class Springnote(object):
         self.set_access_token(access_token)
 
         self.verbose = verbose
-
-    def oauth_request(self, method, url, params={}, sign_token=None, verbose=False):
-        ''' springnote_request에서 사용할 OAuth request를 생성합니다. 
-        
-        여기서 생성된 oauth request는 문자열 형태로 header에 포함됩니다.  '''
-        sign_token = self.format_token(sign_token or self.access_token)
-        oauth_request = oauth.OAuthRequest.from_consumer_and_token(
-            self.consumer_token, sign_token, method, url, params)
-        oauth_request.sign_request(
-            Springnote.signature_method, self.consumer_token, sign_token)
-
-        if is_verbose(verbose):
-            print '>> oauth:'
-            print ' * signature method :', Springnote.signature_method.get_name()
-            print ' * consumer token :', (self.consumer_token.key, self.consumer_token.secret)
-            print ' * sign token :', sign_token #(sign_token.key, sign_token.secret)
-
-            print '>> oauth parameters:'
-            for key in sorted(oauth_request.parameters.keys()):
-                print " *", key, ':', oauth_request.parameters[key]
-
-        return oauth_request
-
-
-    def springnote_request(self, method, url, params={}, headers=None, body=None, sign_token=None, secure=False, verbose=False):
-        """ Springnote에서 사용하는 request를 생성합니다. 
-
-        oauth 인증을 위해 request token과 access token을 요청할 때와
-        일반적인 springnote resource 요청할 때 사용합니다.
-
-        >>> access_token = oauth.OAuthToken('key', 'secret')
-        >>> http_response = Springnote(access_token).springnote_request( \
-                "GET", "http://url.com/path")
-        """
-        oauth_request = self.oauth_request(method, url, params, \
-            sign_token=(sign_token or self.access_token), verbose=verbose)
-
-        # set headers
-        if headers is None:
-            headers = {}
-        if method != "GET" and is_file_type(body):
-            headers['Content-Type'] = 'multipart/form-data; boundary=%s' % Springnote.BOUNDARY
-        elif '.json' in url: 
-            headers['Content-Type'] = 'application/json'
-        headers.update(oauth_request.to_header())
-
-        # set body
-        if is_file_type(body):
-            body = Springnote.create_query_multipart_str(body)
-
-        if is_verbose(verbose):
-            print '>> header:'
-            for key, value in headers.iteritems():
-                print " *", key, ':', value
-
-            if body:
-                print '>> body:'
-                print `body`
-
-            print '>> request:'
-            print oauth_request.http_method, oauth_request.http_url
-            print 'header:', headers
-            if body: print 'body:', `body`
-            print
-
-        # create http(s) connection and request
-        if secure:
-            if is_verbose(verbose): print 'using HTTPS'
-            conn = httplib.HTTPSConnection(HOST)
-        else:
-            conn = httplib.HTTPConnection(HOST)
-
-        # response
-        try:
-            if not default_dry_run:
-                conn.request(oauth_request.http_method, oauth_request.http_url, body=body, headers=headers)
-        except socket.gaierror:
-            raise SpringnoteError.Network("%s에 접근할 수가 없습니다." % oauth_request.http_url)
-        return conn.getresponse()
-
-
-    @staticmethod
-    def create_query_multipart_str(file, boundary=BOUNDARY):
-        return "\r\n".join([
-            '--%s' % boundary,
-            'Content-Disposition: form-data; name="Filedata"; filename="%s"' % file.name,
-            'Content-Transfer-Encoding: binary',
-            'Content-Type: application/octet-stream',
-            '',
-            file.read(),
-            '--%s--' % boundary,
-        ])
 
     def set_access_token(self, *args):
         """ 직접 access token을 지정합니다. 
@@ -322,6 +192,104 @@ class Springnote(object):
                 return oauth.OAuthToken(args[0].key, args[0].secret)
         return
 
+    def oauth_request(self, method, url, params=None, sign_token=None, verbose=False):
+        ''' springnote_request에서 사용할 OAuth request를 생성합니다. 
+        
+        여기서 생성된 oauth request는 문자열 형태로 header에 포함됩니다.  '''
+        sign_token = self.format_token(sign_token or self.access_token)
+        request = oauth.OAuthRequest.from_consumer_and_token(
+            self.consumer_token, sign_token, method, url, params or {})
+        request.sign_request(
+            Springnote.signature_method, self.consumer_token, sign_token)
+
+        if is_verbose(verbose):
+            print '>> oauth:'
+            print ' * signature method :', Springnote.signature_method.get_name()
+            print ' * consumer token :', (self.consumer_token.key, self.consumer_token.secret)
+            print ' * sign token :', sign_token #(sign_token.key, sign_token.secret)
+
+            print '>> oauth parameters:'
+            for key in sorted(request.parameters.keys()):
+                print " *", key, ':', request.parameters[key]
+
+        return request
+
+
+    def springnote_request(self, method, url, params={}, headers=None, body=None, sign_token=None, secure=False, verbose=False):
+        """ Springnote에서 사용하는 request를 생성합니다. 
+
+        oauth 인증을 위해 request token과 access token을 요청할 때와
+        일반적인 springnote resource 요청할 때 사용합니다.
+
+        >>> access_token = oauth.OAuthToken('key', 'secret')
+        >>> http_response = Springnote(access_token).springnote_request( \
+                "GET", "http://url.com/path")
+        """
+        oauth_request = self.oauth_request(method, url, params, \
+            sign_token=(sign_token or self.access_token), verbose=verbose)
+
+        headers = Springnote.set_headers(headers, oauth_request, method, body)
+        body    = Springnote.set_body(body)
+
+        if is_verbose(verbose):
+            print '>> header:'
+            for key, value in headers.iteritems():
+                print " *", key, ':', value
+
+            if body:
+                print '>> body:'
+                print `body`
+
+            print '>> request:'
+            print oauth_request.http_method, oauth_request.http_url
+            print 'header:', headers
+            if body: print 'body:', `body`
+            print
+
+        # create http(s) connection and request
+        if secure:
+            if is_verbose(verbose): print 'using HTTPS'
+            conn = httplib.HTTPSConnection(HOST)
+        else:
+            conn = httplib.HTTPConnection(HOST)
+
+        # response
+        try:
+            if not default_dry_run:
+                conn.request(oauth_request.http_method, oauth_request.http_url, 
+                            body=body, headers=headers)
+        except socket.gaierror:
+            raise SpringnoteError.Network("%s에 접근할 수가 없습니다." % oauth_request.http_url)
+        return conn.getresponse()
+
+    @staticmethod
+    def set_headers(headers, oauth_request, method, body):
+        headers = headers or {}
+        # when POST or PUT attachment
+        if method != "GET" and is_file_type(body):
+            headers.setdefault('Content-Type', Springnote.MULTIPART_CONTENT_TYPE)
+        # normal
+        else:
+            headers.setdefault('Content-Type', Springnote.DEFAULT_CONTENT_TYPE)
+        headers.update(oauth_request.to_header())
+        return headers
+
+    @staticmethod
+    def wrap_file_to_body(data, boundary=BOUNDARY):
+        if is_file_type(data):
+            data = "\r\n".join([
+                '--%s' % boundary,
+                'Content-Disposition: form-data; name="Filedata"; filename="%s"' % data.name,
+                'Content-Transfer-Encoding: binary',
+                'Content-Type: application/octet-stream',
+                '',
+                data.read(),
+                '--%s--' % boundary,
+            ])
+        return data
+    set_body = wrap_file_to_body
+
+
 ##
 ## -- OOP layer
 ##
@@ -352,31 +320,24 @@ class SpringnoteResource(object):
             raise AttributeError(error_msg)
     id = property(_get_id, _set_id)
 
-    def request(self, path, method="GET", params={}, data=None, 
+    def request(self, path, method="GET", params={}, headers=None, data=None, 
                 process_response=True, verbose=None):
         ''' calls handle_request and build resource from output '''
+        if data:
+            data = self.to_json()
         instance = self.handle_request(auth=self.auth, parent=self.parent,
-                        path=path, method=method, params=params, data=data, 
-                        process_response=process_response, verbose=verbose)
+                    path=path, method=method, params=params, headers=headers, 
+                    data=data, process_response=process_response, verbose=verbose)
         self.replace_with(instance)
         return self
 
     @classmethod
-    def handle_request(cls, auth, parent, path, method="GET", params={}, data=None, 
-                process_response=True, verbose=None):
+    def handle_request(cls, auth, parent, path, method="GET", params={}, 
+                headers=None, data=None, process_response=True, verbose=None):
         """ send request to springnote.com and create resource from response.
             used by every subclass of SpringnoteResource """
 
-        url     = "http://%s/%s" % (HOST, path.lstrip('/'))
-        headers = {}
-        if data: # set body if given (ex. {'page': ...})
-            if not is_file_type(data):
-                data = {cls.__name__.lower(): data}
-                data = json.dumps(data, ensure_ascii=False)
-                sys.stdout.flush()
-                if type(data) == str: 
-                    data = data.decode('utf-8')
-                data = data.encode('utf-8')
+        url  = "http://%s/%s" % (HOST, path.lstrip('/'))
         use_https = False
 
         if is_verbose(verbose):
@@ -393,10 +354,10 @@ class SpringnoteResource(object):
         # send request
         response = Springnote(auth.access_token, auth.consumer_token) \
             .springnote_request(method=method, url=url, params=params, 
-                    headers = headers,   
-                    body    = data,
-                    secure  = use_https, 
-                    verbose = verbose
+                headers = headers,   
+                body    = data,
+                secure  = use_https, 
+                verbose = verbose
         )
 
         if not default_dry_run:
@@ -409,6 +370,23 @@ class SpringnoteResource(object):
                 new_instance.raw = data
                 return new_instance
             return cls.from_json(data, auth, parent, verbose=verbose)
+
+    def to_json(self):
+        ''' wraps data into json format '''
+        # set data in json format (ex. {'page': {'title': 'some title here' ..}}
+        data = {}
+        for attr in getattr(self, 'writable_attributes', self.springnote_attributes):
+            value = getattr(self, attr, False)
+            if value:
+                data[attr] = value
+        data = {self.__class__.__name__.lower(): data}
+        # json
+        data = json.dumps(data, ensure_ascii=False)
+        # encode to utf-8
+        if type(data) == str: 
+            data = data.decode('utf-8')
+        data = data.encode('utf-8')
+        return data
 
     @classmethod
     def from_json(cls, data, auth, parent=None, verbose=None): 
@@ -438,6 +416,7 @@ class SpringnoteResource(object):
                 return new_instance
 
             # wrap with object name if not given and retry - {'id':3}
+            # Lock resource is not wrapped in 'lock' for some reason
             elif json.loads(data):
                 wrapped_data = '{"%s": %s}' % (object_name, data)
                 new_instance = cls.from_json(wrapped_data, auth, parent, verbose=verbose)
@@ -574,7 +553,6 @@ class Page(SpringnoteResource):
         "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
         "tags"                  # 페이지에 붙은 태그  예) tag1,tag2
     ]
-    # name of attributes used when save()
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
     # arguments to check parameter validity
     check_parameters = { 
@@ -589,16 +567,6 @@ class Page(SpringnoteResource):
     }
     request_methods = ['get', 'save', 'delete', 'list', 
         'search', 'get_root', 'get_parent', 'get_children',
-    ]
-    # sugar methods for attachment
-    subresource_method_names = [
-        # attachment
-        "list_attachments",  "get_attachment",    "download_attachment", 
-        "upload_attachment", "delete_attachment",
-        # comment and collaboration
-        "list_comments", "list_collaborations", 
-        # lock and revision
-        "get_lock", "acquire_lock", "list_revisions", "get_revision"
     ]
 
     def __init__(self, auth, id=None, note=None, 
@@ -655,6 +623,14 @@ class Page(SpringnoteResource):
                 raise SpringnoteError.InvalidOption(error_msg)
         return params
 
+    def writable_resource(self): 
+        data = {}
+        for attr in self.writable_attributes:
+            value = getattr(self, attr, False)
+            if value:
+                data[attr] = value
+        return data
+
     # -- 
     def get(self, verbose=None):
         """ fetch the page with current id. 
@@ -670,12 +646,7 @@ class Page(SpringnoteResource):
         if self.id: method = "PUT"  # update existing page
         else:       method = "POST" # create new page
         path, params = self._set_path_params(self, id=self.id, note=self.note)
-
-        data = {}
-        for attr in self.writable_attributes:
-            value = getattr(self, attr, False)
-            if value:
-                data[attr] = value
+        data = self.writable_resource()
     
         self.request(path, method, params=params, data=data, verbose=verbose)
         return self
@@ -697,7 +668,8 @@ class Page(SpringnoteResource):
         if note: kwarg.update(note=note)
 
         path, params = Page._set_path_params(**kwarg) # ignores id
-        pages = cls.handle_request(auth, None, path, "GET", params, verbose=verbose)
+        pages = cls.handle_request(auth, None, path, "GET", params, 
+                                    verbose=verbose)
 
         # connect parents
         page_dictionary = {}
@@ -737,13 +709,6 @@ class Page(SpringnoteResource):
         for page in children:   
             page.parent = self
         return children
-    
-    ## define sugar methods
-    #for method_name in subresource_method_names:
-    #    locals()[method_name] = generate_method(method_name)
-    #    locals()[method_name].__name__ = method_name
-    #    del method_name
-#register_methods(Page, Page.subresource_method_names)
 
 
 class Attachment(SpringnoteResource):
@@ -787,6 +752,10 @@ class Attachment(SpringnoteResource):
             return File(self.title, self.content)
         return None
     file = property(_get_file, _set_file)
+
+    def to_json(self):
+        ''' Attachment.to_json only needs to wrap file object into json '''
+        return Springnote.wrap_file_to_body(self.file)
             
     @classmethod
     def list(cls, page, auth=None, verbose=None):
@@ -845,8 +814,9 @@ class Attachment(SpringnoteResource):
         else:        method = "POST"  # create new attachment
 
         path, params = Attachment._set_path_params(self.parent, id=self.id)
-        return self.request(path, method, params=params, data=self.file, 
-                            verbose=verbose)
+        headers = {'Content-Type': Springnote.MULTIPART_CONTENT_TYPE}
+        return self.request(path, method, params=params, headers=headers, 
+                            data=self.file, verbose=verbose)
 
 
 class Comment(SpringnoteResource):
@@ -937,6 +907,46 @@ class Revision(SpringnoteResource):
         path, params = self._set_path_params(self.parent, id=self.id)
         return self.request(path, "GET", params, verbose=verbose)
 
+
+# black-and-white magic 
+def run_resource_method(parent, function_name, resource, method_name, *args, **kwarg):
+    ''' detach function_name and call approriate resource.method(parent) '''
+    method  = getattr(resource, method_name)
+    verbose = kwarg.pop('verbose', None)
+    if method.im_self is None:      # instance method
+        instance = resource(parent, *args, **kwarg)
+        method   = getattr(instance, method_name)
+        return method(verbose=verbose)
+    else:                           # class method
+        method = getattr(resource, method_name)
+        return method(parent, verbose=verbose, *args, **kwarg)
+def register_request_methods(parent, *children):
+    ''' binds request methods from children resources to the parent resource.
+
+    read request methods from children resources, and
+    generate a 'request_resource' style method and bind it to the parent resource.
+
+    examples:
+     * page.get_attachment()       calls Attachment(page).get()
+     * sn.list_pages(verbose=True) calls Page.list(sn, verbose=True)
+    '''
+    def generate_method(method_name, resource, method):
+        return lambda parent, *args, **kwarg: \
+                    run_resource_method(parent, method_name, resource, method, 
+                                            *args, **kwarg)
+    #
+    for child in children:                              # eg, Attachment
+        for request_method in child.request_methods:    # eg, 'download'
+            method_name = request_method + "_" + child.__name__.lower()
+            # add 's' suffix to classmethods. eg, 'list_attachments'
+            if getattr(child, request_method).im_self:
+                method_name += "s"
+
+            method = generate_method(method_name, child, request_method)
+            setattr(parent, method_name, method)        # Page.list_attachments
+            setattr(method, '__name__', method_name)    # Page.list_atatchments.__name__
+
 # bind request methods to parent resource
 register_request_methods(Springnote, Page)
 register_request_methods(Page, Attachment, Comment, Lock, Revision, Collaboration)
+

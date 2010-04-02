@@ -189,8 +189,8 @@ class IntegrationTestCase(unittest.TestCase):
 
         # POST attachment - post attachment to the page                  
         _starting("test POST attachment")
-        url  = 'http://api.springnote.com/pages/%d/attachments.json' % page_id
-        data = open(__file__, 'rb') # i shall sacrifice myself for testing!
+        url     = 'http://api.springnote.com/pages/%d/attachments.json' % page_id
+        data    = open(__file__, 'rb') # i shall sacrifice myself for testing!
         resp = sn.springnote_request("POST", url, body=data, verbose=global_verbose)
         data.close()
         _check_http_status(resp, "error on POST attachment")

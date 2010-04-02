@@ -133,8 +133,9 @@ class PageRequestTestCase(unittest.TestCase):
     @unittest.test
     def save_method_without_id_calls_create_page_request(self):
         """ page.save() without id calls create page request
-        Page(self.auth, title='title', source='source').save() calls 
-        springnote_request(method="POST", body={title:..,source:..}, ..) """
+
+        Page(auth, title='title', source='source').save()  calls 
+        springnote_request(method="POST", body={title:.., source:..}, ..) """
         title  = 'some title'
         source = 'blah blah ahaha'
 
@@ -181,6 +182,29 @@ class PageRequestTestCase(unittest.TestCase):
         note, id = 'jangxyz', 123
         should_call_method(springnote.Page, '_set_path_params', 
             lambda: springnote.Page(self.auth, note=note, id=id).save()
+        )
+
+    @unittest.test
+    def save_method_only_puts_attributes_in_writable_attributes(self):
+        ''' page.save() only packs attributes in writable_attribute '''
+        page = springnote.Page(self.auth, id=3, title='title', source='source')
+        # these shouldn't be in body
+        page.rights               = "rights"
+        page.date_created         = "date_created"
+        page.date_modified        = "date_modified"
+        page.creator              = "creator"
+        page.contributor_modified = "contributor_modified"
+        
+        should_call_method(springnote.Springnote, 'springnote_request',
+            when=lambda: page.save(),
+            arg=with_at_least(body=is_not(
+                any_of(
+                    contains_string("rights"),
+                    contains_string("date_created"),
+                    contains_string("date_modified"),
+                    contains_string("creator"),
+                    contains_string("contributor_modified"),
+                )))
         )
 
 
@@ -632,7 +656,7 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         page1 = springnote.Page(self.auth, id=123)
         page2 = page1.get()
 
-        assert_that(page1, is_(page2))
+        assert_that(id(page1), is_(id(page2)))
 
     @unittest.test
     def id_should_be_same_as_identifier(self):

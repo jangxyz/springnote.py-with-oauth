@@ -144,7 +144,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
         url_pattern = re.compile(url_pattern)
         self.expects_springnote_request.with_at_least(
             method=eq("PUT"), url=string_contains(url_pattern),
-            body=eq(self.file_obj)
+            body=string_contains(self.file_obj.read())
         )
         # run
         self.attach.upload()
@@ -158,7 +158,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
         url_pattern = re.compile("/pages/%d/attachments[.]" % self.page.id)
         self.expects_springnote_request.with_at_least(
             method=eq("POST"), url=string_contains(url_pattern),
-            body=eq(self.file_obj))
+            body=string_contains(self.file_obj.read()))
         # run
         self.attach.upload()
 
