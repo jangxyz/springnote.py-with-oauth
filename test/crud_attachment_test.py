@@ -40,11 +40,19 @@ class AttachmentResourceTestCase(unittest.TestCase):
         # file object mock
         file_content = 'FILE CONTENT'
         self.filename = 'testfile.txt'
+        self.wrapped_body = '--AaB03x\r\n' \
+            'Content-Disposition: form-data; name="Filedata"; filename="README"\r\n' \
+            'Content-Transfer-Encoding: binary\r\n' \
+            'Content-Type: application/octet-stream\r\n' \
+            '\r\n' \
+            '%s' \
+            '--AaB03x--' % file_content
         self.file_obj = Mock()
         self.file_obj.name = self.filename
         self.file_obj.expects(at_least_once()).method('seek')
         self.file_obj.expects(at_least_once()).read() \
             .will(return_value(file_content))
+
 
         #
         self.auth = Mock()
@@ -66,7 +74,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
 
     @unittest.test
     def class_method_list_calls_proper_path(self):
-        ''' list() calls GET ".../pages/123/attachments". '''
+        ''' list() calls GET ".../pages/123/attachments.json" '''
         # mock
         url_pattern = re.compile("/pages/%d/attachments[.]" % self.page.id)
         self.expects_springnote_request.with_at_least(
@@ -142,10 +150,13 @@ class AttachmentResourceTestCase(unittest.TestCase):
         # mock
         url_pattern = "/pages/%d/attachments/%d[.]" % (self.page.id, self.attach.id)
         url_pattern = re.compile(url_pattern)
+        springnote.Springnote.expects(once()).method('wrap_file_to_body') \
+            .will(return_value(self.wrapped_body))
         self.expects_springnote_request.with_at_least(
             method=eq("PUT"), url=string_contains(url_pattern),
             body=string_contains(self.file_obj.read())
-        )
+        ) \
+        .after('wrap_file_to_body')
         # run
         self.attach.upload()
 
@@ -156,6 +167,8 @@ class AttachmentResourceTestCase(unittest.TestCase):
         self.attach.file = self.file_obj
         # mock
         url_pattern = re.compile("/pages/%d/attachments[.]" % self.page.id)
+        springnote.Springnote.expects(once()).method('wrap_file_to_body') \
+            .will(return_value(self.wrapped_body))
         self.expects_springnote_request.with_at_least(
             method=eq("POST"), url=string_contains(url_pattern),
             body=string_contains(self.file_obj.read()))
@@ -270,66 +283,6 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         attach.download()
         assert_that(attach.title,   is_(None))
         assert_that(attach.content, is_not(None))
-
-    @unittest.test
-    def download_saves_file_to_local(self):
-        ''' download(filename) saves to local filename '''
-        filename = 'localfile.txt'
-        run = lambda: self.attach.download(filename)
-        should_call_method(__builtin__, 'open',
-            when = run,
-            arg  = with_(eq(filename), string_contains('w')))
-
-    @unittest.test
-    def download_with_filename_true_saves_locally_with_same_filename(self):
-        ''' download(filename=True) saves with same filename if title is set '''
-        self.attach.title = "some_filename.txt"
-        filename = True
-        should_call_method(__builtin__, 'open',
-            when = lambda: self.attach.download(filename),
-            arg  = with_(eq(self.attach.title), string_contains('w')))
-
-    @unittest.test
-    def download_with_path_and_filename_saves_in_that_position(self):
-        ''' download() with path and filename saves to that path '''
-        filename = "test_file.txt"
-        path     = "/tmp"
-        run = lambda: self.attach.download(filename, path)
-        should_call_method(__builtin__, 'open',
-            when = run,
-            arg  = with_(eq(path +"/"+ filename), string_contains('w')))
-            
-    @unittest.test
-    def download_should_not_save_file_if_file_does_not_exist(self):
-        ''' download(filename) should not save locally if file already exist '''
-        filename = 'localfile.txt'
-        run      = lambda: self.attach.download(filename)
-        # save & patch
-        O_os_path_exists = springnote.os.path.exists
-        springnote.os.path.exists = lambda x: True
-        
-        should_not_call_method(__builtin__, 'open',
-            when = run,
-            arg  = with_(eq(filename), string_contains('w')))
-
-        # recover
-        springnote.os.path.exists = O_os_path_exists
-
-    @unittest.test
-    def download_with_overwrite_should_save_file_even_if_file_does_not_exist(self):
-        ''' download(filename, overwrite) should save locally even if file exists '''
-        filename  = 'localfile.txt'
-        run       = lambda: self.attach.download(filename, overwrite=True)
-        # save & patch
-        O_os_path_exists = springnote.os.path.exists
-        springnote.os.path.exists = lambda x: True
-        
-        should_call_method(__builtin__, 'open',
-            when = run,
-            arg  = with_(eq(filename), string_contains('w')))
-
-        # recover
-        springnote.os.path.exists = O_os_path_exists
 
     @unittest.test
     def download_and_delete_methods_should_have_both_page_id_and_id(self):

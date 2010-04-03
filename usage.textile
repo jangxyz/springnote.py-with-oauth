@@ -51,7 +51,7 @@ page.save()        # 요청!
 <pre><code>lot_of_pages = Page.list(sn, tags="검토중")
 </code></pre>
 
-지원하는 요청: get, save, delete, list, search, get_root, get_parent, get_children
+Page.request_methods: get, save, delete, list, search, get_root, get_parent, get_children
 
 h3. 생성 (save)
 
@@ -168,7 +168,7 @@ springnote_attributes = [
 
 첨부 파일을 읽거나 쓸 수 있습니다. 인증 정보는 Springnote 객체를 넘겨줘도 되지만 page만 넘겨줘도 충분합니다.
 
-지원하는 요청: get, upload, download, delete, list
+Attachment.request_methods: get, upload, download, delete, list
 
 h3. 모든 첨부 파일 정보 보기 (list)
 
@@ -257,7 +257,7 @@ springnote_attributes = [
 
 페이지에 달린 댓글의 목록을 가져옵니다. 그 이상 없습니다.
 
-지원하는 요청: list
+Comment.request_methods: list
 
 h3. 댓글 보기 (list)
 
@@ -281,7 +281,7 @@ springnote_attributes = [
 
 마찬가지로 page 객체로 바로 접근 가능합니다.
 
-지원하는 요청: get, list
+Revision.request_methods: get, list
 
 h3. 페이지의 모든 리비전 보기 (list)
 
@@ -317,7 +317,7 @@ springnote_attributes = [
 
 여러 명이 동시에 한 페이지를 편집하는 것을 막기 위해, 편집하는 사람이 페이지를 잠그고 있습니다. 편집이 더 이상 이뤄지지 않으면 일정시간 내에 lock은 자동 반환됩니다. 혼자 사용할 때는 신경 쓸 일이 없어요. 
 
-지원하는 요청: get, acquire
+Lock.request_methods: get, acquire
 
 h3. 잠금 상태 확인 (get)
 
@@ -347,7 +347,7 @@ springnote_attributes = [
 
 한 페이지를 여럿이 편집하고 있을 때, 협업자의 목록을 보여줍니다. 
 
-지원하는 요청: list
+Collaboration.request_methods: list
 
 h3. 협업자 목록 보기 (list)
 

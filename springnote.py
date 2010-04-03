@@ -302,7 +302,7 @@ class SpringnoteResource(object):
     def __init__(self, auth, parent=None):
         self.auth     = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
         self.parent   = parent
-        self.resource = {}      # 스프링노트의 리소스를 담는 dictionary 
+        #self.resource = {}      # 스프링노트의 리소스를 담는 dictionary 
         self.raw      = ''      # request의 결과로 가져온 raw data
         for attr in self.springnote_attributes:
             setattr(self, attr, None)
@@ -409,10 +409,9 @@ class SpringnoteResource(object):
             if object_name in structure:
                 new_instance = cls(auth=auth, parent=parent)
                 new_instance.raw = data
-                new_instance.resource = structure[object_name]
 
                 # process resource specific tasks
-                new_instance.process_resource(new_instance.resource)
+                new_instance._set_resource(structure[object_name])
                 return new_instance
 
             # wrap with object name if not given and retry - {'id':3}
@@ -446,25 +445,34 @@ class SpringnoteResource(object):
 
     @staticmethod
     def _to_unicode(s):
+        ''' '\\uc2a4\\ud504\\ub9c1\\ub178\\ud2b8' => u"스프링노트" '''
         #return eval('u"""%s"""' % s)
-        def repl(match): return unichr(int(match.group(1), 16))
+        def repl(match): 
+            return unichr(int(match.group(1), 16))
         return re.sub(r"\\u([0-9a-fA-F]{4})", repl, s)
 
 
-    def process_resource(self, resource_dict):
+    def _set_resource(self, resource_dict):
         """ resource마다 따로 필요한 후처리 작업을 해줍니다. 
 
         각 resource마다 이 메소드를 재정의해서 필요한 후처리를 할 수 있습니다. 
-        기본적으로 .id attribute를 추가합니다.
         """
-        # set direct accessor (ex: page.identifier == 2)
-        [setattr(self, key, value) for key, value in resource_dict.iteritems()]
-        # unicode
-        for key, value in resource_dict.iteritems():
+        for key in self.springnote_attributes:
+            # key may not exist in given dictionary. skip
+            if key not in resource_dict:
+                continue
+            # set value
+            value = resource_dict[key]
+            # convert to unicode if string value
             if isinstance(value, types.StringTypes):
-                setattr(self, key, self._to_unicode(value))
-        self.resource = resource_dict
+                value = self._to_unicode(value)
+            setattr(self, key, value)
+    def _get_resource(self):
+        resource_dict = {}
+        for key in self.springnote_attributes:
+            resource_dict[key] = getattr(self, key)
         return resource_dict
+    resource = property(_get_resource, _set_resource)
 
     def requires_value_for(self, *attribute_names):
         ''' check value for given attribute names, raise InvalidOption if none.
@@ -574,8 +582,7 @@ class Page(SpringnoteResource):
             parent=None):
         SpringnoteResource.__init__(self, auth)
         # 
-        self.note     = note
-        self.resource = {}
+        self.note   = note
         # springnote attributes
         self.id     = id
         self.title  = title
@@ -583,12 +590,11 @@ class Page(SpringnoteResource):
         self.tags   = tags
         self.relation_is_part_of = relation_is_part_of
 
-    def process_resource(self, resource_dict):
-        """ + tags를 배열로 변환한다. """
-        super(Page, self).process_resource(resource_dict)
-        if "tags" in resource_dict:
-            self.tags = filter(None, self.tags.split(','))
-        return resource_dict
+    #def _set_resource(self, resource_dict):
+    #    """ add feature: convert content of .tags to list """
+    #    super(Page, self)._set_resource(resource_dict)
+    #    if "tags" in resource_dict:
+    #        self.tags = filter(None, self.tags.split(','))
 
     @classmethod
     def _set_path_params(cls, page=None, **kwarg):
@@ -770,31 +776,12 @@ class Attachment(SpringnoteResource):
         path, params = self._set_path_params(self.parent, self.id, format=True)
         self.request(path, "GET", params, verbose=verbose)
 
-    def download(self, filename=None, filepath=None, overwrite=False, verbose=None):
-        """ fetch the attachment file. requires id and parent.id 
-        
-        tries to save the download to file if filename (and filepath) is given.
-        it tries to use the default if filename is set to True, 
-        but note that download() does not cannot retreive the filename.
-
-        if there already is a file in the specified path and name, 
-        it will not save it unless you've set the overwrite to True.
-
-        to sum up, saving as a file fails if:
-            * default (filename is None)
-            * filename is True, but self.title is not set
-            * filename is some string, but there already exist a file (overwrite=False)
-        """
+    def download(self, filename=None, verbose=None):
+        """ fetch the attachment file. requires id and parent.id """
         self.requires_value_for('id', 'parent.id')
         path, params = self._set_path_params(self.parent, self.id, format=False)
         self.request(path, "GET", params, process_response=False, verbose=verbose)
-        # own post process - tries to save file
         self.content = self.raw
-        if filename is True:  filename = self.title
-        if filepath:          filename = os.path.join(filepath, filename)
-        if filename:
-            if overwrite or not os.path.exists(filename):
-                open(filename, 'w')
 
         return self
 
@@ -924,11 +911,11 @@ def register_request_methods(parent, *children):
     ''' binds request methods from children resources to the parent resource.
 
     read request methods from children resources, and
-    generate a 'request_resource' style method and bind it to the parent resource.
+    generate a 'request_resource' style method and bind it to the parent.
 
     examples:
-     * page.get_attachment()       calls Attachment(page).get()
-     * sn.list_pages(verbose=True) calls Page.list(sn, verbose=True)
+     * page.get_attachment()        is  Attachment(page).get()
+     * sn.list_pages(verbose=True)  is  Page.list(sn, verbose=True)
     '''
     def generate_method(method_name, resource, method):
         return lambda parent, *args, **kwarg: \
@@ -938,13 +925,13 @@ def register_request_methods(parent, *children):
     for child in children:                              # eg, Attachment
         for request_method in child.request_methods:    # eg, 'download'
             method_name = request_method + "_" + child.__name__.lower()
-            # add 's' suffix to classmethods. eg, 'list_attachments'
+            # add -s to classmethods. eg, 'list_attachments'
             if getattr(child, request_method).im_self:
                 method_name += "s"
 
             method = generate_method(method_name, child, request_method)
-            setattr(parent, method_name, method)        # Page.list_attachments
-            setattr(method, '__name__', method_name)    # Page.list_atatchments.__name__
+            setattr(parent, method_name, method)     # eg, Page.get_lock
+            setattr(method, '__name__', method_name) # eg, Page.get_lock.__name__
 
 # bind request methods to parent resource
 register_request_methods(Springnote, Page)

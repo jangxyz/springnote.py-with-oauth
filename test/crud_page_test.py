@@ -435,6 +435,7 @@ class ConventionalMethodsTestCase(unittest.TestCase):
         page.relation_is_part_of = parent_id
 
         run = lambda: page.get_parent()
+        # calls springnote.Page(auth, id=parent_id)
         should_call_class(springnote, 'Page', when=run,
             arg = with_(eq(self.auth), id=eq(parent_id))
         )
@@ -681,13 +682,13 @@ class PageBlackMagicTestCase(unittest.TestCase):
     def page_get_attachment_calls_attachment_get(self):
         ''' page.get_attachment(id, verbose) calls Attachment(page, id).get(verbose) '''
         id      = 456
-        verbose = True
+        verbose = False
 
-        run  = lambda: self.page.get_attachment(id=id, verbose=verbose)
-        ## springnote.Attachment(page, id=123)
+        run = lambda: self.page.get_attachment(id=id, verbose=verbose)
+        ## calls springnote.Attachment(page, id=123)
         #should_call_class(springnote, 'Attachment', when=run, 
         #                        arg=with_(eq(self.page), id=eq(id)))
-        # springnote.Attachment.get(verbose=True)
+        # calls springnote.Attachment.get(verbose=True)
         should_call_method(springnote.Attachment, 'get', when=run, 
                                 arg=with_at_least(verbose=eq(verbose)))
 
