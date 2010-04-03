@@ -11,7 +11,9 @@ __email__   = "janghwan at gmail dot com"
 __version__ = 0.7
 
 import env 
-import oauth, sys, types, re, inspect
+import oauth, sys, types
+import re, time
+from datetime import datetime, timedelta
 import httplib, urllib, socket, os.path
 
 # try importing json: simplejson -> json -> FAIL
@@ -334,8 +336,7 @@ class SpringnoteResource(object):
     def request(self, path, method="GET", params={}, headers=None, data=None, 
                 process_response=True, verbose=None):
         ''' calls handle_request and build resource from output '''
-        if data:
-            data = self.to_json()
+        if data: data = self.to_json()
         instance = self.handle_request(auth=self.auth, parent=self.parent,
                     path=path, method=method, params=params, headers=headers, 
                     data=data, process_response=process_response, verbose=verbose)
@@ -408,7 +409,7 @@ class SpringnoteResource(object):
         """ create and return new resource object from given json string
 
           * raw     : stores json response itself
-          * resource: stores converted json response (dictionary)
+          * resource: stores converted json response as dictionary
         """
         if is_verbose(verbose):
             print '<< data:'
@@ -448,15 +449,13 @@ class SpringnoteResource(object):
         raise SpringnoteError.ParseError('unable to build resource from: ' + data)
 
     def replace_with(self, obj):
-        ''' build attributes from object given, ignoring improper values '''
-        for attr in dir(obj):
+        ''' copy springnote_attributes and raw from object given '''
+        for attr in self.springnote_attributes:
             value = getattr(obj, attr, None)
-            # XXX: this seems dirty, doesn't it?
-            if callable(value):         continue
-            if attr.startswith('__'):   continue
-
             if value is not None:
                 setattr(self, attr, value)
+        setattr(self, 'raw', obj.raw)
+
         del obj
         return self
 
@@ -575,8 +574,8 @@ class Page(SpringnoteResource):
 
     springnote_attributes = [ 
         "identifier",           # 페이지 고유 ID  예) 2
-        "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
-        "date_modified",        # 페이지 최종 수정 일시(UTC)  예) datetime.datetime(2008, 1, 30, 10, 11, 16)
+        "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime(2008, 1, 30, 10, 11, 16)
+        "date_modified",        # 페이지 최종 수정 일시(UTC)  예) datetime(2008, 1, 30, 10, 11, 16)
         "rights",               # 페이지에 설정된 Creative Commons License  예) by-nc
         "creator",              # 페이지 소유자 OpenID
         "contributor_modified", # 최종 수정자 OpenID
@@ -614,6 +613,34 @@ class Page(SpringnoteResource):
         self.tags   = tags
         self.relation_is_part_of = relation_is_part_of
 
+    def _set_resource(self, resource_dict):
+        """ add feature: convert content of .tags to list """
+        super(Page, self)._set_resource(resource_dict)
+        convert_tag_string_to_list = lambda tag_s: filter(None, tag_s.split(','))
+        def convert_str_to_datetime(date_s):
+            dt  = datetime.strptime(date_s, "%Y/%m/%d %H:%M:%S +0000")
+            dt -= timedelta(seconds=time.timezone)
+            return dt
+        if "tags" in resource_dict:
+            self.tags = convert_tag_string_to_list(resource_dict["tags"])
+        if "date_created" in resource_dict:
+            self.date_created = convert_str_to_datetime(resource_dict["date_created"])
+        if "date_modified" in resource_dict:
+            self.date_modified = convert_str_to_datetime(resource_dict["date_modified"])
+    def _get_resource(self):
+        """ revert feature: convert content of .tags to string """
+        resource_dict = super(Page, self)._get_resource()
+        convert_tag_list_to_string = lambda tag_l: ','.join(tag_l)
+        def convert_datetime_to_str(date):
+            date += timedelta(seconds=time.timezone)
+            return date.strftime("%Y/%m/%d %H:%M:%S +0000")
+        resource_dict['tags'] = convert_tag_list_to_string(self.tags)
+        resource_dict['date_created']  = convert_datetime_to_str(self.date_created)
+        resource_dict['date_modified'] = convert_datetime_to_str(self.date_modified)
+        return resource_dict
+    resource = property(_get_resource, _set_resource)
+
+>>>>>>> tags & datetime(naive) conversion for Page:springnote.py
     @classmethod
     def _set_path_params(cls, page=None, **kwarg):
         ''' format path and params, according to page id and note '''
@@ -655,7 +682,7 @@ class Page(SpringnoteResource):
                 data[attr] = value
         return data
 
-    # -- 
+    ## -- request methods 
     def get(self, verbose=None):
         """ fetch the page with current id. 
         hence the page instance MUST have id attribute """
