@@ -74,19 +74,13 @@ class SpringnoteError:
             else:                               return ": %s" % e
 
 def is_verbose(verbose):
-    if verbose is True:
+    if verbose is True or (verbose is None and default_verbose is True):
         return True
-    elif verbose is None and default_verbose is True:
-        return True
-    else:
-        return False
-
+    return False
 def is_file_type(data):
     ''' needs data.name and data.read() to act as a file '''
-    if not getattr(data, 'name', False):
-        return False
-    if hasattr(data, 'read') and callable(data.read):
-        return True
+    if hasattr(data, 'name') and hasattr(data, 'read') and callable(data.read):
+         return True
     return False
 
 
@@ -132,8 +126,9 @@ class Springnote(object):
         need to use:
          1. POST method. do not use GET
          2. HTTPS connection
-         3. no token to sign. this is going to be your first token
-        
+         3. HMAC-SHA1 as signature method
+         4. no token to sign but consumer token
+
         >> request_token = Springnote.fetch_request_token()
         """
         response = self.springnote_request(
@@ -169,7 +164,8 @@ class Springnote(object):
          1. use POST method. do not use GET
          2. use HTTPS connection
          3. let user authorize request token
-         4. sign with the request token
+         4. HMAC-SHA1 as signature method
+         5. sign with the request token with consumer token
         
         >> access_token = Springnote.fetch_access_token(request_token)
         """
@@ -210,8 +206,7 @@ class Springnote(object):
         sign_token = self.format_token(sign_token or self.access_token)
         request = oauth.OAuthRequest.from_consumer_and_token(
             self.consumer_token, sign_token, method, url, params or {})
-        request.sign_request(
-            Springnote.signature_method, self.consumer_token, sign_token)
+        request.sign_request(Springnote.signature_method, self.consumer_token, sign_token)
 
         if is_verbose(verbose):
             print '>> oauth:'
@@ -225,7 +220,8 @@ class Springnote(object):
 
         return request
 
-    def springnote_request(self, method, url, params={}, headers=None, body=None, sign_token=None, secure=False, verbose=False):
+    def springnote_request(self, method, url, params={}, headers=None, body=None, 
+            sign_token=None, secure=False, verbose=False):
         """ Springnote에서 사용하는 request를 생성합니다. 
 
         oauth 인증을 위해 request token과 access token을 요청할 때와
@@ -310,7 +306,6 @@ class SpringnoteResource(object):
     def __init__(self, auth, parent=None):
         self.auth     = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
         self.parent   = parent
-        #self.resource = {}      # 스프링노트의 리소스를 담는 dictionary 
         self.raw      = ''      # request의 결과로 가져온 raw data
         for attr in self.springnote_attributes:
             setattr(self, attr, None)
@@ -343,26 +338,29 @@ class SpringnoteResource(object):
     def handle_request(cls, auth, parent, path, method="GET", params={}, 
                 headers=None, data=None, process_response=True, verbose=None):
         """ send request to springnote.com and create resource from response.
-            used by every subclass of SpringnoteResource """
+            used by every subclass of SpringnoteResource 
+            
+        note that HTTPS won't work. always use HTTP """
 
         url  = "http://%s/%s" % (HOST, path.lstrip('/'))
-        use_https = False
+        use_https = False       # this should always be False
 
         if is_verbose(verbose):
             print '>> content'
-            if use_https:
-                print ' * uses HTTPS connection'
             print ' * HTTP method:', method
             print ' * params:',      params
             print ' * path:',        path
             print ' * url:',         url
-            print ' * data:',        data
             print ' * headers:',     headers
+            print ' * data:',        data
 
         # send request
         response = Springnote(auth.access_token, auth.consumer_token) \
-            .springnote_request(method=method, url=url, params=params, 
-                headers = headers,   
+            .springnote_request(
+                method  = method,
+                url     = url,
+                params  = params,
+                headers = headers,
                 body    = data,
                 secure  = use_https, 
                 verbose = verbose
@@ -753,12 +751,12 @@ class Attachment(SpringnoteResource):
             def __init__(self, name, content):
                 self.name = name
                 self.read = lambda: content
-            def __eq__(self, file_object):
-                try:
-                    return self.name == file_object.name and \
-                        self.read() == file_object.read()
-                except:
-                    return False
+            #def __eq__(self, file_object):
+            #    try:
+            #        return self.name == file_object.name and \
+            #            self.read() == file_object.read()
+            #    except:
+            #        return False
         if self.title and self.content:
             return File(self.title, self.content)
         return None
@@ -800,8 +798,8 @@ class Attachment(SpringnoteResource):
         """ upload a file as attachment. requires file and parent.id
 
         if id is given, it updates an existing file
-        and if not, creates a new file """
-        #self.requires_value_for('parent.id', 'file')
+        if not,         creates a new file """
+        self.requires_value_for('parent.id', 'file')
         if self.id:  method = "PUT"   # update existing attachment
         else:        method = "POST"  # create new attachment
 
@@ -826,7 +824,6 @@ class Comment(SpringnoteResource):
         path, params = cls._set_path_params(page)
         return cls.handle_request(auth or page.auth, page,
                                     path, "GET", params, verbose=verbose)
-
 
 class Collaboration(SpringnoteResource):
     springnote_attributes = [ 
@@ -902,14 +899,14 @@ class Revision(SpringnoteResource):
 
 # black-and-white magic 
 def run_resource_method(parent, function_name, resource, method_name, *args, **kwarg):
-    ''' detach function_name and call approriate resource.method(parent) '''
+    ''' detach function_name and call appropriate resource.method(parent) '''
     method  = getattr(resource, method_name)
     verbose = kwarg.pop('verbose', None)
-    if method.im_self is None:      # instance method
+    if method.im_self is None:                      # instance method
         instance = resource(parent, *args, **kwarg)
         method   = getattr(instance, method_name)
         return method(verbose=verbose)
-    else:                           # class method
+    else:                                           # class method
         method = getattr(resource, method_name)
         return method(parent, verbose=verbose, *args, **kwarg)
 def register_request_methods(parent, *children):
@@ -930,7 +927,7 @@ def register_request_methods(parent, *children):
     for child in children:                              # eg, Attachment
         for request_method in child.request_methods:    # eg, 'download'
             method_name = request_method + "_" + child.__name__.lower()
-            # add -s to classmethods. eg, 'list_attachments'
+            # add '-s' to classmethods. eg, 'list_attachments'
             if getattr(child, request_method).im_self:
                 method_name += "s"
 

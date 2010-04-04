@@ -165,9 +165,10 @@ class Response401TestCase(HttplibRequestMockedTestCase):
         ''' 401 is raised when invalid request for request token 
         
         don't forget to:
-         1. POST method.
-         2. use HTTPS.
-         3. no token to sign.
+         1. use POST method
+         2. use HTTPS
+         3. HMAC-SHA1 as signature method
+         4. no token to sign
         '''
         # mock response
         resp_data = '''[{"error": {"error_type": "InvalidOauthRequest", "description": "signature_invalid, base string: POST\u0026https%3A%2F%2Fapi.springnote.com%2Foauth%2Frequest_token\u0026oauth_consumer_key%3D1y64mD1KSo885Eq4Vz2w%26oauth_nonce%123456789A%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1270374296%26oauth_token%3DINVALID%26oauth_version%3D1.0"}}]'''
@@ -188,7 +189,8 @@ class Response401TestCase(HttplibRequestMockedTestCase):
          1. POST method
          2. use HTTPS
          3. let the user authorize request token
-         3. sign with the request token
+         4. HMAC-SHA1 as signature method
+         5. sign with the request token
         '''
         # mock response
         resp_data = '''[{"error": {"error_type": "InvalidOauthRequest", "description": "request_token_invalid()"}}]'''

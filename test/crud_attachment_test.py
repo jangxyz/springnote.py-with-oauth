@@ -190,16 +190,15 @@ class AttachmentResourceTestCase(unittest.TestCase):
     @unittest.test
     def upload_should_have_both_page_id_and_file(self):
         ''' upload() raises InvalidOption if either page id or file object is not given '''
+        run = lambda: attach.upload()
         # page without an id
         page   = springnote.Page(self.auth, None)
         attach = springnote.Attachment(page, file=self.file_obj)
-        should_raise(springnote.SpringnoteError.InvalidOption, 
-                    when = lambda: attach.upload())
+        should_raise(springnote.SpringnoteError.InvalidOption, when=run)
 
         # no file
         attach = springnote.Attachment(self.page, file=None)
-        should_raise(springnote.SpringnoteError.InvalidOption, 
-                    when = lambda: attach.upload())
+        should_raise(springnote.SpringnoteError.InvalidOption, when=run)
 
     @unittest.test
     def id_should_be_same_as_identifier(self):
@@ -287,18 +286,15 @@ class AttachmentDownloadTestCase(unittest.TestCase):
     @unittest.test
     def download_and_delete_methods_should_have_both_page_id_and_id(self):
         ''' download() raises InvalidOption if any of page id and id is not given '''
+        run = lambda: pageid_less_attach.download()
         # test page without id
         idless_page = springnote.Page(self.auth, None) 
         pageid_less_attach = springnote.Attachment(idless_page, id=123)
-        should_raise(springnote.SpringnoteError.InvalidOption, 
-                    when=lambda: pageid_less_attach.download())
+        should_raise(springnote.SpringnoteError.InvalidOption, when=run)
 
         # test attachment without id
         id_less_attach = springnote.Attachment(self.page, id=None)
-        should_raise(springnote.SpringnoteError.InvalidOption, 
-                    when=lambda: id_less_attach.download())
-
-        
+        should_raise(springnote.SpringnoteError.InvalidOption, when=run)
 
 
 if __name__ == '__main__':
