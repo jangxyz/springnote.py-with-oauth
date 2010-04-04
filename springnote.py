@@ -39,40 +39,39 @@ AUTHORIZATION_URL = 'https://%s/oauth/authorize'               % HOST
 default_verbose = False
 default_dry_run = False
 
+
+# exceptions
 class SpringnoteError:
     class Base(Exception):
-        def __init__(self, error):
-            self.error = error
-        def __str__(self):
-            error_tuple = lambda x: (x["error"]["error_type"], x["error"]["description"])
-            error_tuple_str = lambda x: "%s: %s" % error_tuple(x)
-            if isinstance(self.error, dict):
-                return error_tuple_str(self.error)
-            elif isinstance(self.error, list):
-                error_msgs = [error_tuple_str(error) for error in self.error]
-                return '\n'.join(error_msgs)
-            else:
-                return self.error
-    class InvalidOption(Base): pass
-    class ParseError(Base):   pass
-    class Unauthorized(Base): pass
-    class NotFound(Base):     pass
-    class Network(Base):      pass
-
-    class Response(Base):
+        def __init__(self, error):  self.error = error
+        def __str__(self):          return self.error
+    class NoNetwork(Base):      pass # if requested without network connection
+    class InvalidOption(Base):  pass # if user gave invalid argument
+    class ParseError(Base):     pass # if received json is invalid
+    class Response(Base): # springnote.com error response
         # status codes and names, extracted from httplib
-        status_map = {100: 'CONTINUE', 101: 'SWITCHING_PROTOCOLS', 102: 'PROCESSING', 200: 'OK', 201: 'CREATED', 202: 'ACCEPTED', 203: 'NON_AUTHORITATIVE_INFORMATION', 204: 'NO_CONTENT', 205: 'RESET_CONTENT', 206: 'PARTIAL_CONTENT', 207: 'MULTI_STATUS', 226: 'IM_USED', 300: 'MULTIPLE_CHOICES', 301: 'MOVED_PERMANENTLY', 302: 'FOUND', 303: 'SEE_OTHER', 304: 'NOT_MODIFIED', 305: 'USE_PROXY', 307: 'TEMPORARY_REDIRECT', 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 402: 'PAYMENT_REQUIRED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 406: 'NOT_ACCEPTABLE', 407: 'PROXY_AUTHENTICATION_REQUIRED', 408: 'REQUEST_TIMEOUT', 409: 'CONFLICT', 410: 'GONE', 411: 'LENGTH_REQUIRED', 412: 'PRECONDITION_FAILED', 413: 'REQUEST_ENTITY_TOO_LARGE', 414: 'REQUEST_URI_TOO_LONG', 415: 'UNSUPPORTED_MEDIA_TYPE', 416: 'REQUESTED_RANGE_NOT_SATISFIABLE', 417: 'EXPECTATION_FAILED', 422: 'UNPROCESSABLE_ENTITY', 423: 'LOCKED', 424: 'FAILED_DEPENDENCY', 426: 'UPGRADE_REQUIRED', 443: 'HTTPS_PORT', 500: 'INTERNAL_SERVER_ERROR', 501: 'NOT_IMPLEMENTED', 502: 'BAD_GATEWAY', 503: 'SERVICE_UNAVAILABLE', 504: 'GATEWAY_TIMEOUT', 505: 'HTTP_VERSION_NOT_SUPPORTED', 507: 'INSUFFICIENT_STORAGE', 510: 'NOT_EXTENDED'}
+        http_status_map = {100: 'CONTINUE', 101: 'SWITCHING_PROTOCOLS', 102: 'PROCESSING', 200: 'OK', 201: 'CREATED', 202: 'ACCEPTED', 203: 'NON_AUTHORITATIVE_INFORMATION', 204: 'NO_CONTENT', 205: 'RESET_CONTENT', 206: 'PARTIAL_CONTENT', 207: 'MULTI_STATUS', 226: 'IM_USED', 300: 'MULTIPLE_CHOICES', 301: 'MOVED_PERMANENTLY', 302: 'FOUND', 303: 'SEE_OTHER', 304: 'NOT_MODIFIED', 305: 'USE_PROXY', 307: 'TEMPORARY_REDIRECT', 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 402: 'PAYMENT_REQUIRED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 405: 'METHOD_NOT_ALLOWED', 406: 'NOT_ACCEPTABLE', 407: 'PROXY_AUTHENTICATION_REQUIRED', 408: 'REQUEST_TIMEOUT', 409: 'CONFLICT', 410: 'GONE', 411: 'LENGTH_REQUIRED', 412: 'PRECONDITION_FAILED', 413: 'REQUEST_ENTITY_TOO_LARGE', 414: 'REQUEST_URI_TOO_LONG', 415: 'UNSUPPORTED_MEDIA_TYPE', 416: 'REQUESTED_RANGE_NOT_SATISFIABLE', 417: 'EXPECTATION_FAILED', 422: 'UNPROCESSABLE_ENTITY', 423: 'LOCKED', 424: 'FAILED_DEPENDENCY', 426: 'UPGRADE_REQUIRED', 443: 'HTTPS_PORT', 500: 'INTERNAL_SERVER_ERROR', 501: 'NOT_IMPLEMENTED', 502: 'BAD_GATEWAY', 503: 'SERVICE_UNAVAILABLE', 504: 'GATEWAY_TIMEOUT', 505: 'HTTP_VERSION_NOT_SUPPORTED', 507: 'INSUFFICIENT_STORAGE', 510: 'NOT_EXTENDED'}
 
-        def __init__(self, response):
-            body = response.read()
-            try:
-                errors = json.loads(body)
-            except ValueError:
-                errors = body
-
-            status_name = self.status_map[response.status].replace('_', ' ')
+        def __init__(self, response, msg=None):
+            self.msg    = msg
             self.status = response.status
-            self.error  = "%d %s: %s" % (response.status, status_name, errors)
+            self.error  = response.read()
+            try:                # parse json
+                self.error = json.loads(self.error)
+            except ValueError:  # handle non-json messages
+                if '<html' in self.error and 'http-equiv="Content-Type"' in self.error and 'content="text/html;charset=UTF-8"' in self.error:
+                    if   self.status == httplib.INTERNAL_SERVER_ERROR:  self.error = "Invalid Action"
+                    elif self.status == httplib.NOT_FOUND:              self.error = "Not Found"
+        def __str__(self):
+            msg  = `self.status` +" "+ self.http_status_map[self.status]
+            msg += self.format_body(self.error)
+            if self.msg: 
+                msg += ", " + self.msg
+            return msg
+        def format_body(self, e):
+            if isinstance(e, types.ListType):   return "\n".join(map(self.format_body, e))
+            elif isinstance(e, types.DictType): return " - %s: %s" % (e["error"]["error_type"], e["error"]["description"])
+            else:                               return ": %s" % e
 
 def is_verbose(verbose):
     if verbose is True:
@@ -128,21 +127,26 @@ class Springnote(object):
         return self.access_token
 
     def fetch_request_token(self, verbose=None):
-        """ consumer의 자격으로 springnote.com으로부터 request token을 받아옵니다.
+        """ fetch a request token from springnote.com as a consumer application
+
+        need to use:
+         1. POST method. do not use GET
+         2. HTTPS connection
+         3. no token to sign. this is going to be your first token
         
         >> request_token = Springnote.fetch_request_token()
         """
         response = self.springnote_request(
-            'POST', url=REQUEST_TOKEN_URL, 
+            'POST', url=REQUEST_TOKEN_URL,
             secure=True, sign_token=None, verbose=verbose)
 
         # parse request token
-        if not default_dry_run:
-            if response.status != httplib.OK:
-                raise SpringnoteError.Response(response)
-            request_token = oauth.OAuthToken.from_string(response.read())
-        else:
-            request_token = oauth.OAuthToken('FAKE_REQUEST_TOKEN_KEY', 'FAKE_REQUEST_TOKEN_SECRET')
+        if default_dry_run:
+            return oauth.OAuthToken('FAKE_REQUEST_TOKEN_KEY', 'FAKE_REQUEST_TOKEN_SECRET')
+
+        if response.status != httplib.OK:
+            raise SpringnoteError.Response(response, 'make sure to use POST and HTTPS without any sign token')
+        request_token = oauth.OAuthToken.from_string(response.read())
 
         if is_verbose(verbose):
             print "<< request token:", (request_token.key, request_token.secret)
@@ -159,8 +163,15 @@ class Springnote(object):
         return url
     
     def fetch_access_token(self, request_token, verbose=None):
-        """ consumer의 자격으로 springnote.com에 request token을 주고 access token을 받아옵니다.
-        access token은 request token이 있어야 하며, fetch_request_token()이 사전에 불렸어야 합니다.
+        """ fetch access token from springnote.com with authorized request token
+
+        need to:
+         1. use POST method. do not use GET
+         2. use HTTPS connection
+         3. let user authorize request token
+         4. sign with the request token
+        
+        >> access_token = Springnote.fetch_access_token(request_token)
         """
         # request to springnote.com
         response = self.springnote_request(
@@ -168,7 +179,7 @@ class Springnote(object):
             sign_token=request_token, secure=True, verbose=verbose)
     
         if response.status != httplib.OK:
-            raise SpringnoteError.Response(response)
+            raise SpringnoteError.Response(response, 'make sure to use POST, HTTPS and sign with request token authorized by user')
     
         access_token = oauth.OAuthToken.from_string(response.read())
         self.set_access_token(access_token)
@@ -194,7 +205,7 @@ class Springnote(object):
 
     def oauth_request(self, method, url, params=None, sign_token=None, verbose=False):
         ''' springnote_request에서 사용할 OAuth request를 생성합니다. 
-        
+
         여기서 생성된 oauth request는 문자열 형태로 header에 포함됩니다.  '''
         sign_token = self.format_token(sign_token or self.access_token)
         request = oauth.OAuthRequest.from_consumer_and_token(
@@ -213,7 +224,6 @@ class Springnote(object):
                 print " *", key, ':', request.parameters[key]
 
         return request
-
 
     def springnote_request(self, method, url, params={}, headers=None, body=None, sign_token=None, secure=False, verbose=False):
         """ Springnote에서 사용하는 request를 생성합니다. 
@@ -247,19 +257,17 @@ class Springnote(object):
             print
 
         # create http(s) connection and request
-        if secure:
-            if is_verbose(verbose): print 'using HTTPS'
-            conn = httplib.HTTPSConnection(HOST)
-        else:
-            conn = httplib.HTTPConnection(HOST)
+        if is_verbose(verbose) and secure: print 'using HTTPS'
+        if secure:  conn = httplib.HTTPSConnection(HOST)
+        else:       conn = httplib.HTTPConnection(HOST)
 
-        # response
+        # request
+        if default_dry_run: return
         try:
-            if not default_dry_run:
-                conn.request(oauth_request.http_method, oauth_request.http_url, 
-                            body=body, headers=headers)
+            conn.request(oauth_request.http_method, oauth_request.http_url, 
+                        body=body, headers=headers)
         except socket.gaierror:
-            raise SpringnoteError.Network("%s에 접근할 수가 없습니다." % oauth_request.http_url)
+            raise SpringnoteError.NoNetwork("cannot reach '%s'" % oauth_request.http_url)
         return conn.getresponse()
 
     @staticmethod
@@ -360,16 +368,17 @@ class SpringnoteResource(object):
                 verbose = verbose
         )
 
-        if not default_dry_run:
-            if response.status != httplib.OK:
-                raise SpringnoteError.Response(response)
+        if default_dry_run: return
+        if response.status != httplib.OK:
+            raise SpringnoteError.Response(response, 'failed to %s %s' % (method,url))
 
-            data = response.read()
-            if not process_response: 
-                new_instance = cls(auth=auth, parent=parent)
-                new_instance.raw = data
-                return new_instance
-            return cls.from_json(data, auth, parent, verbose=verbose)
+        # handle response
+        data = response.read()
+        if not process_response: 
+            new_instance = cls(auth=auth, parent=parent)
+            new_instance.raw = data
+            return new_instance
+        return cls.from_json(data, auth, parent, verbose=verbose)
 
     def to_json(self):
         ''' wraps data into json format '''
@@ -402,7 +411,10 @@ class SpringnoteResource(object):
 
         # build proper object
         object_name = cls.__name__.lower() # Page => 'page'
-        structure = json.loads(data)
+        try:
+            structure = json.loads(data)
+        except ValueError:
+            raise SpringnoteError.ParseError('unable to load json: ' + `data`)
 
         if isinstance(structure, types.DictType):
             # build single data - {'page': {'id':3}}
@@ -415,8 +427,7 @@ class SpringnoteResource(object):
                 return new_instance
 
             # wrap with object name if not given and retry - {'id':3}
-            # Lock resource is not wrapped in 'lock' for some reason
-            elif json.loads(data):
+            else:
                 wrapped_data = '{"%s": %s}' % (object_name, data)
                 new_instance = cls.from_json(wrapped_data, auth, parent, verbose=verbose)
                 new_instance.raw = data
@@ -475,7 +486,7 @@ class SpringnoteResource(object):
     resource = property(_get_resource, _set_resource)
 
     def requires_value_for(self, *attribute_names):
-        ''' check value for given attribute names, raise InvalidOption if none.
+        ''' check value for given attribute names, raise exception if none.
         recursive attribute names like 'parent.id' work '''
         # format error message
         error_msg = map(lambda x: "'%s'" % x, attribute_names)
@@ -571,7 +582,7 @@ class Page(SpringnoteResource):
         'parent_id': lambda x: types.IntType(x),
         'q'        : lambda x: types.UnicodeType(x),
         'tags'     : lambda x: types.UnicodeType(x),
-        'identifiers': lambda x: re.match("([0-9]+,)*[0-9]+", x).group(0), 
+        'identifiers': lambda x: re.match("([0-9]+,)*[0-9]+", str(x)).group(0), 
     }
     request_methods = ['get', 'save', 'delete', 'list', 
         'search', 'get_root', 'get_parent', 'get_children',
@@ -590,12 +601,6 @@ class Page(SpringnoteResource):
         self.tags   = tags
         self.relation_is_part_of = relation_is_part_of
 
-    #def _set_resource(self, resource_dict):
-    #    """ add feature: convert content of .tags to list """
-    #    super(Page, self)._set_resource(resource_dict)
-    #    if "tags" in resource_dict:
-    #        self.tags = filter(None, self.tags.split(','))
-
     @classmethod
     def _set_path_params(cls, page=None, **kwarg):
         ''' format path and params, according to page id and note '''
@@ -612,9 +617,9 @@ class Page(SpringnoteResource):
         for key, value in kwarg.iteritems():
             if key not in cls.check_parameters:
                 continue
-            error_msg = "%s is not allowed for %s" % (value, key)
 
             check_method = cls.check_parameters[key]
+            error_msg = "%s is not allowed for %s" % (value, key)
             try:
                 correct_result = check_method(value)
                 if not correct_result:
@@ -796,7 +801,7 @@ class Attachment(SpringnoteResource):
 
         if id is given, it updates an existing file
         and if not, creates a new file """
-        self.requires_value_for('parent.id', 'file')
+        #self.requires_value_for('parent.id', 'file')
         if self.id:  method = "PUT"   # update existing attachment
         else:        method = "POST"  # create new attachment
 

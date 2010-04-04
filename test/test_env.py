@@ -115,6 +115,8 @@ def should_not_call_method(object, method_name, when, method_type=None, arg=None
         should_call_method(object, method_name, when, method_type, arg)
         raise AssertionError, "method %s is called" % method_name
     except AssertionError: pass
+    except:
+        pass
     finally:    # restore
         setattr(object, method_name, orig)
 
