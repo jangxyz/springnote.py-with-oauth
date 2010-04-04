@@ -10,7 +10,7 @@ __author__  = "Jang-hwan Kim"
 __email__   = "janghwan at gmail dot com"
 __version__ = 0.7
 
-import env 
+import env
 import oauth, sys, types
 import re, time
 from datetime import datetime, timedelta
@@ -90,7 +90,7 @@ class Springnote(object):
     ''' handles every kind of requests sent to springnote.com, both 
     Authentication and Resources, using OAuth. '''
     signature_method       = oauth.OAuthSignatureMethod_HMAC_SHA1()
-    BOUNDARY               = 'AaB03x' 
+    BOUNDARY               = 'AaB03x'
     DEFAULT_CONTENT_TYPE   = 'application/json'
     MULTIPART_CONTENT_TYPE = 'multipart/form-data; boundary=%s' % BOUNDARY
 
@@ -276,13 +276,10 @@ class Springnote(object):
     def set_headers(headers, oauth_request, method, body):
         headers = headers or {}
         content_type = Springnote.DEFAULT_CONTENT_TYPE
-        if method != "GET" and is_file_type(body): # when POST or PUT attachment
+        if is_file_type(body): # when POST or PUT attachment
             content_type = Springnote.MULTIPART_CONTENT_TYPE
         headers.setdefault('Content-Type', content_type)
-        #    headers.setdefault('Content-Type', Springnote.MULTIPART_CONTENT_TYPE)
-        ## normal
-        #else:
-        #    headers.setdefault('Content-Type', Springnote.DEFAULT_CONTENT_TYPE)
+
         headers.update(oauth_request.to_header())
         return headers
 
@@ -312,6 +309,7 @@ class SpringnoteResource(object):
     """
     springnote_attributes = []            # springnote attributes for each resource
     request_methods       = ['request']   # request methods for each resource
+    datetime_format       = "%Y/%m/%d %H:%M:%S +0000"
 
     def __init__(self, auth, parent=None):
         self.auth   = auth    # has .access_token and .consumer_token
@@ -319,24 +317,21 @@ class SpringnoteResource(object):
         self.raw    = ''      # raw data fetched from request
         for attr in self.springnote_attributes:
             setattr(self, attr, None)
-        return
 
-    # consider `id' as an alias of `identifier'
-    def _set_id(self, id):
-        if hasattr(self, 'identifier'): self.identifier = id
-        else:                           setattr(self, 'id', id)
+    # `id' is an alias for `identifier'
+    def _set_id(self, id): self.identifier = id
     def _get_id(self):
-        if   hasattr(self, 'identifier'): return self.identifier
-        elif hasattr(self, 'id'):         return self.id
-        else:   
-            error_msg = "'%s' object has no attribute 'id'" % self.__class__.__name__
-            raise AttributeError(error_msg)
+        if hasattr(self, 'identifier'): return self.identifier
+        else:
+            raise AttributeError("'%s' object has no attribute 'identifier'" % self.__class__.__name__)
     id = property(_get_id, _set_id)
 
     def request(self, path, method="GET", params={}, headers=None, data=None, 
                 process_response=True, verbose=None):
         ''' calls handle_request and build resource from output '''
-        if data: data = self.to_json()
+        if data:
+            data = self.to_json()
+
         instance = self.handle_request(auth=self.auth, parent=self.parent,
                     path=path, method=method, params=params, headers=headers, 
                     data=data, process_response=process_response, verbose=verbose)
@@ -387,25 +382,26 @@ class SpringnoteResource(object):
             return new_instance
         return cls.from_json(data, auth, parent, verbose=verbose)
 
-    def to_json(self):
+    def to_json(self, data=None):
         ''' wraps data into json format '''
-        # set data in json format (ex. {'page': {'title': 'some title here' ..}}
-        data = {}
-        for attr in getattr(self, 'writable_attributes', self.springnote_attributes):
-            value = getattr(self, attr, False)
-            if value:
-                data[attr] = value
+        # structure data in json format (ex. {'page': {'title': 'title here' ..}}
+        data = data or {}
+        for attr_name in getattr(self, 'writable_attributes', self.springnote_attributes):
+            value = getattr(self, 'resource', {}).get(attr_name, None)
+            value = value or getattr(self, attr_name, False)
+            if value and attr_name not in data:
+                data[attr_name] = value
         data = {self.__class__.__name__.lower(): data}
         # json
         data = json.dumps(data, ensure_ascii=False)
         # encode to utf-8
-        if type(data) == str: 
+        if type(data) == str:
             data = data.decode('utf-8')
         data = data.encode('utf-8')
         return data
 
     @classmethod
-    def from_json(cls, data, auth, parent=None, verbose=None): 
+    def from_json(cls, data, auth, parent=None, verbose=None):
         """ create and return new resource object from given json string
 
           * raw     : stores json response itself
@@ -443,7 +439,7 @@ class SpringnoteResource(object):
         # build multiple resources - [{'page': {'id':3}}, {'page': {'id':4}}]
         elif type(structure) is list:
             build = lambda d: cls.from_json(json.dumps(d, ensure_ascii=False),
-                        auth=auth, parent=parent, verbose=verbose)
+                                            auth, parent, verbose=verbose)
             return map(build, structure)
 
         raise SpringnoteError.ParseError('unable to build resource from: ' + data)
@@ -463,7 +459,7 @@ class SpringnoteResource(object):
     def _to_unicode(s):
         ''' '\\uc2a4\\ud504\\ub9c1\\ub178\\ud2b8' => u"스프링노트" '''
         #return eval('u"""%s"""' % s)
-        def repl(match): 
+        def repl(match):
             return unichr(int(match.group(1), 16))
         return re.sub(r"\\u([0-9a-fA-F]{4})", repl, s)
 
@@ -471,21 +467,46 @@ class SpringnoteResource(object):
     def _set_resource(self, resource_dict):
         """ absorbs the dictionary data into its attributes """
         for key in self.springnote_attributes:
-            # key may not exist in given dictionary. skip
-            if key not in resource_dict:
-                continue
-            # set value
+            if key not in resource_dict: continue
             value = resource_dict[key]
+
             # convert to unicode if string value
             if isinstance(value, types.StringTypes):
                 value = self._to_unicode(value)
+            # convert string to datetime format
+            if key in ["date_created", "date_modified", "date_expired"]:
+                value = SpringnoteResource.convert_str_to_datetime(value, self.datetime_format)
             setattr(self, key, value)
     def _get_resource(self):
         resource_dict = {}
         for key in self.springnote_attributes:
-            resource_dict[key] = getattr(self, key)
+            value = getattr(self, key)
+            # convert datetime to string format
+            if key in ["date_created", "date_modified", "date_expired"]:
+                value = SpringnoteResource.convert_datetime_to_str(value, self.datetime_format)
+            resource_dict[key] = value
         return resource_dict
     resource = property(_get_resource, _set_resource)
+
+    @staticmethod
+    def convert_str_to_datetime(date, format):
+        if date:
+            date = datetime.strptime(date[:], format)
+            # UTC to local time
+            if format.endswith("+0900"):
+                date -= timedelta(seconds=9*60*60)
+            date -= timedelta(seconds=time.timezone)
+        return date
+    @staticmethod
+    def convert_datetime_to_str(date, format):
+        if date:
+            # local time to UTC
+            if format.endswith("+0900"):
+                date += timedelta(seconds=9*60*60)
+            date += timedelta(seconds=time.timezone)
+
+            date = date.strftime(format)
+        return date
 
     def requires_value_for(self, *attribute_names):
         """ check value for given attribute names, raise exception if none.
@@ -539,7 +560,7 @@ class SpringnoteResource(object):
         if page.id:     path += "/%d" % page.id # /pages/123
 
         # path for additional resource, if any
-        if cls is not Page: 
+        if cls is not Page:
             if cls:     path += "/%s" % cls.__name__.lower()  # ../attachment
             if plural:  path += 's'             # ../attachments
             if id:      path += "/%d"  % id     # ../attachments/456
@@ -572,7 +593,7 @@ class Page(SpringnoteResource):
     """ 스프링노트의 page에 대한 정보를 가져오거나, 수정할 수 있습니다.
         page의 하위 리소스에 접근할 수 있도록 해줍니다. """
 
-    springnote_attributes = [ 
+    springnote_attributes = [
         "identifier",           # 페이지 고유 ID  예) 2
         "date_created",         # 페이지 최초 생실 일시(UTC)  예) datetime(2008, 1, 30, 10, 11, 16)
         "date_modified",        # 페이지 최종 수정 일시(UTC)  예) datetime(2008, 1, 30, 10, 11, 16)
@@ -580,13 +601,13 @@ class Page(SpringnoteResource):
         "creator",              # 페이지 소유자 OpenID
         "contributor_modified", # 최종 수정자 OpenID
         "title",                # 페이지 이름  예) TestPage
-        "source",               # 페이지 원본.  예) &lt;p&gt; hello &lt;/p&gt; 
+        "source",               # 페이지 원본.  예) <p> hello </p>
         "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
         "tags"                  # 페이지에 붙은 태그  예) tag1,tag2
     ]
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
     # arguments to check parameter validity
-    check_parameters = { 
+    check_parameters = {
         'sort'     : lambda x: x in ['identifier', 'title', 'relation_is_par_of', 'date_modified', 'date_created'],
         'order'    : lambda x: x in ['desc', 'asc'],
         'offset'   : lambda x: types.IntType(x),
@@ -610,37 +631,33 @@ class Page(SpringnoteResource):
         self.id     = id
         self.title  = title
         self.source = source
-        self.tags   = tags
+        self._set_tags(tags) 
         self.relation_is_part_of = relation_is_part_of
 
-    def _set_resource(self, resource_dict):
-        """ add feature: convert content of .tags to list """
-        super(Page, self)._set_resource(resource_dict)
-        convert_tag_string_to_list = lambda tag_s: filter(None, tag_s.split(','))
-        def convert_str_to_datetime(date_s):
-            dt  = datetime.strptime(date_s, "%Y/%m/%d %H:%M:%S +0000")
-            dt -= timedelta(seconds=time.timezone)
-            return dt
-        if "tags" in resource_dict:
-            self.tags = convert_tag_string_to_list(resource_dict["tags"])
-        if "date_created" in resource_dict:
-            self.date_created = convert_str_to_datetime(resource_dict["date_created"])
-        if "date_modified" in resource_dict:
-            self.date_modified = convert_str_to_datetime(resource_dict["date_modified"])
+    def _set_tags(self, tags):
+        ''' split string into list, separated by space and punctuations except $ and _ '''
+        if isinstance(tags, types.StringTypes):
+            tags = tags[:]
+            punctuations = """!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~""" # string.punctuations
+            for punc in punctuations:
+                if punc in ["$", "_"]: continue
+                tags = tags.replace(punc, " ")
+            tags = tags.split()
+        self.tags = tags
+
     def _get_resource(self):
         """ revert feature: convert content of .tags to string """
         resource_dict = super(Page, self)._get_resource()
-        convert_tag_list_to_string = lambda tag_l: ','.join(tag_l)
-        def convert_datetime_to_str(date):
-            date += timedelta(seconds=time.timezone)
-            return date.strftime("%Y/%m/%d %H:%M:%S +0000")
-        resource_dict['tags'] = convert_tag_list_to_string(self.tags)
-        resource_dict['date_created']  = convert_datetime_to_str(self.date_created)
-        resource_dict['date_modified'] = convert_datetime_to_str(self.date_modified)
+        if isinstance(self.tags, types.ListType):
+            resource_dict['tags'] = ','.join(self.tags)
         return resource_dict
+    def _set_resource(self, resource_dict):
+        """ add feature: convert content of .tags to list """
+        super(Page, self)._set_resource(resource_dict)
+        if "tags" in resource_dict:
+            self._set_tags(resource_dict["tags"])
     resource = property(_get_resource, _set_resource)
 
->>>>>>> tags & datetime(naive) conversion for Page:springnote.py
     @classmethod
     def _set_path_params(cls, page=None, **kwarg):
         ''' format path and params, according to page id and note '''
@@ -666,7 +683,7 @@ class Page(SpringnoteResource):
                     raise SpringnoteError.InvalidOption(error_msg)
                 # apply value if result is True
                 elif correct_result is True:
-                    params[key] = value 
+                    params[key] = value
                 # otherwise save the result value
                 else:
                     params[key] = correct_result
@@ -674,7 +691,7 @@ class Page(SpringnoteResource):
                 raise SpringnoteError.InvalidOption(error_msg)
         return params
 
-    def writable_resource(self): 
+    def writable_resource(self):
         data = {}
         for attr in self.writable_attributes:
             value = getattr(self, attr, False)
@@ -682,7 +699,7 @@ class Page(SpringnoteResource):
                 data[attr] = value
         return data
 
-    ## -- request methods 
+    ## -- request methods
     def get(self, verbose=None):
         """ fetch the page with current id. 
         hence the page instance MUST have id attribute """
@@ -697,7 +714,8 @@ class Page(SpringnoteResource):
         if self.id: method = "PUT"  # update existing page
         else:       method = "POST" # create new page
         path, params = self._set_path_params(self, id=self.id, note=self.note)
-        data = self.writable_resource()
+        #data = self.writable_resource()
+        data = self.to_json()
     
         self.request(path, method, params=params, data=data, verbose=verbose)
         return self
@@ -763,7 +781,7 @@ class Page(SpringnoteResource):
 
 
 class Attachment(SpringnoteResource):
-    springnote_attributes = [ 
+    springnote_attributes = [
         "identifier",          # 첨부 고유 ID 예) 2
         "title",               # 첨부 파일 이름 예) test.jpg
         "description",         # 첨부 파일 크기(단위는 바이트) 예) 8000
@@ -789,7 +807,7 @@ class Attachment(SpringnoteResource):
         self.description = len(self.content)
     def _get_file(self):
         ''' return a fake file object with name and read() it '''
-        class File: 
+        class File:
             def __init__(self, name, content):
                 self.name = name
                 self.read = lambda: content
@@ -807,7 +825,7 @@ class Attachment(SpringnoteResource):
     def to_json(self):
         ''' Attachment.to_json only needs to wrap file object into json '''
         return Springnote.wrap_file_to_body(self.file)
-            
+
     @classmethod
     def list(cls, page, auth=None, verbose=None):
         path, params = Attachment._set_path_params(page)
@@ -852,7 +870,7 @@ class Attachment(SpringnoteResource):
 
 
 class Comment(SpringnoteResource):
-    springnote_attributes = [ 
+    springnote_attributes = [
         "identifier",          # 고유 ID 예) 1
         "date_created",        # 최초 생성 일시(UTC)예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
@@ -872,7 +890,7 @@ class Comment(SpringnoteResource):
                                     path, "GET", params, verbose=verbose)
 
 class Collaboration(SpringnoteResource):
-    springnote_attributes = [ 
+    springnote_attributes = [
         "rights_holder", # 협업자의 OpenID
         "access_rights", # 협업자가 가진 권한 예) reader, writer, guest, creator
         "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
@@ -891,7 +909,7 @@ class Collaboration(SpringnoteResource):
 
 
 class Lock(SpringnoteResource):
-    springnote_attributes = [ 
+    springnote_attributes = [
         "creator",             # 현재 페이지를 수정중인 사용자 OpenID
         "date_expired",        # 잠금이 해제되는 (예상) 시간(UTC) 예) 2008-01-30T10:11:16Z
         "relation_is_part_of", # 잠금 리소스가 속한 페이지의 ID
@@ -916,7 +934,7 @@ class Lock(SpringnoteResource):
 
 class Revision(SpringnoteResource):
     # there is no 'date_modified', 'contributor_modified', 'rights', and 'tags'
-    springnote_attributes = [ 
+    springnote_attributes = [
         "identifier",          # 히스토리 고유 ID
         "creator",             # 만든 사람 OpenID
         "date_created",        # 생성된 시간(UTC) 예) 2008-01-30T10:11:16Z
@@ -925,6 +943,7 @@ class Revision(SpringnoteResource):
         "description",         # 히스토리에 대한 설명 -- only at list()
     ]
     request_methods = ['get', 'list']
+    datetime_format = "%Y/%m/%d %H:%M:%S +0900"
 
     def __init__(self, parent, index=None, id=None, auth=None):
         SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
@@ -938,7 +957,7 @@ class Revision(SpringnoteResource):
 
         NOTE: not all attributes are loaded, only the following are:
             [ date_created, identifier, description, creator ]
-        ''' 
+        '''
         path, params = cls._set_path_params(page)
         return cls.handle_request(auth or page.auth, page,
                                     path, "GET", params, verbose=verbose)
@@ -962,7 +981,7 @@ class Revision(SpringnoteResource):
         return self.request(path, "GET", params, verbose=verbose)
 
 
-# black-and-white magic: dynamically build methods into class
+# dynamically build methods into class
 def run_resource_method(parent, function_name, resource, method_name, *args, **kwarg):
     ''' detach function_name and call appropriate resource.method(parent) '''
     method  = getattr(resource, method_name)

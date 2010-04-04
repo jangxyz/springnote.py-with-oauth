@@ -13,6 +13,8 @@ from hamcrest      import *
 from hamcrest_xtnd import *
 
 import springnote
+from datetime import datetime, timedelta
+import time
 
 class SpringnoteResourceTestCase(unittest.TestCase):
     def setUp(self):
@@ -35,14 +37,14 @@ class SpringnoteResourceTestCase(unittest.TestCase):
         # restore
         springnote.Springnote = restore_class_Springnote()
 
-    def verify_classmethod_list(self, resourceClass, method, url_pattern):
+    def verify_classmethod_list(self, resource_class, method, url_pattern):
         ''' Resource.list() calls specified URL with speicified HTTP method '''
         self.expects_springnote_request.with_at_least(
             method = eq(method),
             url    = string_contains(url_pattern)
         )
         # run
-        resourceClass.list(page=self.page)
+        resource_class.list(self.page)
 
     def verify_id_is_same_with_identifier(self, new_cls):
         id = 123
@@ -53,6 +55,39 @@ class SpringnoteResourceTestCase(unittest.TestCase):
         obj = new_cls()
         obj.identifier = id
         assert_that(obj.id, is_(id))
+
+    def verify_datetime_format(self, resource_cls, json, attr_name):
+        ''' json is converted to attribute in resource_cls, in datetime format '''
+        obj = resource_cls.from_json(json, auth=self.sn, parent=self.page)
+        assert_that(getattr(obj, attr_name), instance_of(datetime))
+
+    def verify_localtime_conversion(self, resource_cls, json, attr_name):
+        ''' converts datetime format in localtime '''
+        date_data = springnote.json.loads(json)
+        if len(date_data.keys()) is 1:
+            date_data = date_data.values()[0]
+        date_data = date_data[attr_name]
+        # run 
+        format = getattr(resource_cls, 'datetime_format')
+        dt = datetime.strptime(date_data, format)
+        # localize
+        if format == "%Y/%m/%d %H:%M:%S +0900":
+            dt -= timedelta(seconds=9*60*60)
+        dt -= timedelta(seconds=time.timezone)
+
+        obj = resource_cls.from_json(json, auth=self.sn, parent=self.page)
+        # verify 
+        assert_that(getattr(obj, attr_name).timetuple(), is_(dt.timetuple()))
+
+    def verify_unconverted_datetime(self, resource_cls, json, attr_name):
+        ''' unconverted datetime format is stored in resource attribute '''
+        date_data = springnote.json.loads(json)
+        if len(date_data.keys()) is 1:
+            date_data = date_data.values()[0]
+        date_data = date_data[attr_name]
+        # run & verify
+        obj = resource_cls.from_json(json, auth=self.sn, parent=self.page)
+        assert_that(obj.resource[attr_name], is_(date_data))
 
 from springnote import Comment
 class CommentTestCase(SpringnoteResourceTestCase):
@@ -84,6 +119,22 @@ class CommentTestCase(SpringnoteResourceTestCase):
     def id_should_be_same_as_identifier(self):
         self.verify_id_is_same_with_identifier(lambda: Comment(self.page))
 
+    @unittest.test
+    def converts_date_created_into_datetime_format(self):
+        ''' date_created converts to datetime format '''
+        self.verify_datetime_format(Comment, self.sample_json, 'date_created')
+
+    @unittest.test
+    def converts_datetime_format_with_localtimezone(self):
+        ''' date_created converts to datetime in localtime '''
+        self.verify_localtime_conversion(Comment, self.sample_json, 'date_created')
+
+    @unittest.test
+    def unconverted_datetime_is_in_resource(self):
+        ''' string format date_created is in resource["date_created"] '''
+        self.verify_unconverted_datetime(Comment, self.sample_json, 'date_created')
+
+
 from springnote import Collaboration
 class CollaborationTestCase(SpringnoteResourceTestCase):
     sample_json = '{"collaboration": {' \
@@ -113,14 +164,29 @@ class CollaborationTestCase(SpringnoteResourceTestCase):
         assert_that(hasattr(collab, 'id'        ), is_(False))
         assert_that(hasattr(collab, 'identifier'), is_(False))
 
+    @unittest.test
+    def converts_date_created_into_datetime_format(self):
+        ''' date_created converts to datetime format '''
+        self.verify_datetime_format(Collaboration, self.sample_json, 'date_created')
+
+    @unittest.test
+    def converts_datetime_format_with_localtimezone(self):
+        ''' date_created converts to datetime in localtime '''
+        self.verify_localtime_conversion(Collaboration, self.sample_json, 'date_created')
+
+    @unittest.test
+    def unconverted_datetime_is_in_resource(self):
+        ''' string format date_created is in resource '''
+        self.verify_unconverted_datetime(Collaboration, self.sample_json, 'date_created')
 
 from springnote import Lock
 class LockTestCase(SpringnoteResourceTestCase):
     sample_json = '{' \
         '"creator": "http://aaron.myid.net/",' \
         '"relation_is_part_of": 4,' \
-        '"date_expired": "2008-10-28T13:08:30Z"' \
+        '"date_expired": "2008/10/28 13:08:30 +0000"' \
     '}'
+    #'"date_expired": "2008-10-28T13:08:30Z"' \
     @unittest.test
     def has_springnote_attributes(self):
         ''' Lock has attributes for springnote '''
@@ -152,6 +218,21 @@ class LockTestCase(SpringnoteResourceTestCase):
         # run
         Lock(parent=self.page).acquire()
 
+    @unittest.test
+    def converts_date_expired_into_datetime_format(self):
+        ''' date_expired converts to datetime format '''
+        self.verify_datetime_format(Lock, self.sample_json, 'date_expired')
+
+    @unittest.test
+    def converts_datetime_format_with_localtimezone(self):
+        ''' date_expired converts to datetime in localtime '''
+        self.verify_localtime_conversion(Lock, self.sample_json, 'date_expired')
+
+    @unittest.test
+    def unconverted_datetime_is_in_resource(self):
+        ''' string format date_expired is in resource '''
+        self.verify_unconverted_datetime(Lock, self.sample_json, 'date_expired')
+
 
 from springnote import Revision
 class RevisionTestCase(SpringnoteResourceTestCase):
@@ -160,8 +241,9 @@ class RevisionTestCase(SpringnoteResourceTestCase):
         '"identifier": 29685883, ' \
         '"source": "\\u003Cp\\u003ENone\\u003C/p\\u003E\\n", ' \
         '"relation_is_part_of": 1, ' \
-        '"date_modified": "2008/01/08 10:55:36 +0000" ' \
+        '"date_created": "2008/01/08 10:55:36 +0900" ' \
     '}}'
+    #'"date_created": "2008/01/08 10:55:36 +0000" ' \
     @unittest.test
     def has_springnote_attributes(self):
         ''' Revision has attributes for springnote '''
@@ -213,6 +295,28 @@ class RevisionTestCase(SpringnoteResourceTestCase):
         should_raise(springnote.SpringnoteError.InvalidOption, 
                     when=lambda: id_less_rev.get())
 
+    @unittest.test
+    def converts_date_created_into_datetime_format(self):
+        ''' date_created converts to datetime format '''
+        self.verify_datetime_format(Revision, self.sample_json, 'date_created')
+
+    @unittest.test
+    def converts_datetime_format_with_localtimezone(self):
+        ''' date_created converts to datetime in localtime '''
+        self.verify_localtime_conversion(Revision, self.sample_json, 'date_created')
+
+    @unittest.test
+    def unconverted_datetime_is_in_resource(self):
+        ''' string format date_created is in resource '''
+        self.verify_unconverted_datetime(Revision, self.sample_json, 'date_created')
+
+    @unittest.test
+    def datetime_conversion_preservers_timezone(self):
+        ''' convert and unconverting datetime returns to same string '''
+        date_created = springnote.json.loads(self.sample_json)
+        date_created = date_created['revision']['date_created']
+        rev = Revision(auth=self.sn, parent=self.page, id=4567).get()
+        assert_that(rev.resource['date_created'], is_(date_created))
 
 class RevisionWithIndexTestCase(unittest.TestCase):
     def setUp(self):
@@ -281,6 +385,7 @@ class RevisionWithIndexTestCase(unittest.TestCase):
 
         # restore
         springnote.Revision.list = o_revision_list
+
 
 if __name__ == '__main__':
     unittest.main()

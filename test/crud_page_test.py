@@ -190,8 +190,8 @@ class PageRequestTestCase(unittest.TestCase):
         page = springnote.Page(self.auth, id=3, title='title', source='source')
         # these shouldn't be in body
         page.rights               = "rights"
-        page.date_created         = "date_created"
-        page.date_modified        = "date_modified"
+        page.date_created         = springnote.datetime.now()
+        page.date_modified        = springnote.datetime.now()
         page.creator              = "creator"
         page.contributor_modified = "contributor_modified"
         
@@ -645,8 +645,9 @@ class BuildModelFromResponseTestCase(unittest.TestCase):
         assert_that(pages[0].raw, is_not(has_length(0)))
 
     @unittest.test
-    def other_page_methods_calls_request(self):
+    def other_page_methods_call_request_method(self):
         ''' get, save, delete calls method request '''
+        self.tearDown()
         page = springnote.Page(self.auth, id=123)
         should_call_method(page, 'request', lambda: page.get())
         should_call_method(page, 'request', lambda: page.save())
@@ -723,7 +724,7 @@ class PageBlackMagicTestCase(unittest.TestCase):
             arg = with_at_least(eq(springnote.Attachment), eq(self.page)), 
             method_type=classmethod)
 
-class AttributeConvertTestCase(unittest.TestCase):
+class TagConversionTestCase(unittest.TestCase):
     def setUp(self):
         self.o_Springnote = springnote.Springnote
         self.o_json       = springnote.json
@@ -772,6 +773,20 @@ class AttributeConvertTestCase(unittest.TestCase):
         assert_that(page.tags, is_(tag_list))
 
     @unittest.test
+    def tags_list_in_constructor(self):
+        tags = ["abc", "def"]
+        page = springnote.Page(self.auth, tags=tags)
+        assert_that(page.tags, is_(tags))
+
+    @unittest.test
+    def tags_string_in_constructor_is_splitted_by_space_and_commas(self):
+        ''' passing string tags is saved as list, splitted by both ' ' and ',' '''
+        tag_string = "abc def,ghi"
+        tag_list   = ["abc", "def", "ghi"]
+        page = springnote.Page(self.auth, tags=tag_string)
+        assert_that(page.tags, is_(tag_list))
+
+    @unittest.test
     def unconverted_tags_data_is_in_resource(self):
         ''' "TAG1,TAG2" formatted tags are saved as original in resource '''
         tag_string = "tag1,tag2,tag3"
@@ -786,6 +801,38 @@ class AttributeConvertTestCase(unittest.TestCase):
         # run & verify
         page = springnote.Page(self.auth, id=123).get()
         assert_that(page.resource['tags'], is_(tag_string))
+
+class DateTimeConvesionTestCase(unittest.TestCase):
+    def setUp(self):
+        self.o_Springnote = springnote.Springnote
+        self.o_json       = springnote.json
+
+        # mock objects
+        springnote.Springnote = CMock()
+        springnote.json       = Mock()
+        self.m_get_response   = Mock()
+
+        # default Springnote.springnote_request behavior
+        springnote.Springnote.expects(at_least_once()).method('springnote_request') \
+            .will(return_value(self.m_get_response))
+
+        # default json.loads behavior
+        springnote.json.expects(at_least_once()).method('loads') \
+            .will(return_value(sample_data))
+
+        # default response behavior
+        self.m_get_response.status = 200
+        self.m_get_response.expects(at_least_once()).read() \
+            .will(return_value(sample_json))
+
+        self.auth = Mock()
+        self.auth.access_token = ('ACCESS', 'TOKEN')
+        self.auth.consumer_token = ('CONSUMER', 'TOKEN')
+
+    def tearDown(self):
+        # restore original
+        springnote.Springnote = self.o_Springnote
+        springnote.json       = self.o_json
 
     @unittest.test
     def converts_date_created_and_date_modified_into_datetime_format(self):
@@ -803,14 +850,20 @@ class AttributeConvertTestCase(unittest.TestCase):
     def converts_datetime_format_with_localtimezone(self):
         ''' date_modified and date_created ("2007/10/26 05:30:08 +0000") converts to datetime format '''
         # "2007/10/26 05:30:08 +0000", "2008/01/08 10:55:36 +0000"
-        date_created  = sample_data[u"page"][u"date_created"]
-        date_modified = sample_data[u"page"][u"date_modified"]
+        date_created  = sample_data["page"]["date_created"]
+        date_modified = sample_data["page"]["date_modified"]
 
         # run 
         page = springnote.Page(self.auth, id=123).get()
-        # verify +0900
-        assert_that(page.date_created.timetuple()[:-3],  is_((2007,10,26,14,30,8)))
-        assert_that(page.date_modified.timetuple()[:-3], is_((2008,1,8,19,55,36)))
+
+        # verify localtimezone
+        dt  = springnote.datetime.strptime(date_created, page.datetime_format)
+        dt -= springnote.timedelta(seconds=springnote.time.timezone)
+        assert_that(page.date_created.timetuple(), is_(dt.timetuple()))
+
+        dt  = springnote.datetime.strptime(date_modified, page.datetime_format)
+        dt -= springnote.timedelta(seconds=springnote.time.timezone)
+        assert_that(page.date_modified.timetuple(), is_(dt.timetuple()))
 
     @unittest.test
     def unconverted_datetime_is_in_resource(self):
@@ -821,9 +874,10 @@ class AttributeConvertTestCase(unittest.TestCase):
 
         # run & verify
         page = springnote.Page(self.auth, id=123).get()
-        assert_that(page.resource['date_created'], is_(date_created))
+        assert_that(page.resource['date_created'],  is_(date_created))
         assert_that(page.resource['date_modified'], is_(date_modified))
 
 
 if __name__ == '__main__':
     unittest.main()
+

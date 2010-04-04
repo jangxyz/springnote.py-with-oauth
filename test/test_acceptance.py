@@ -14,6 +14,7 @@ from springnote import Springnote, Page, Attachment, Comment, Collaboration, Rev
 global_verbose      = None
 global_access_token = None
 
+# test basic springnote request
 test_basic_function_calls = True
 # test object calls (eg, Attachment.upload)
 test_object_calls         = True
@@ -317,9 +318,9 @@ class IntegrationTestCase(unittest.TestCase):
         attach.file = File('tmp2', 'CONTENT!')
         attach.upload(verbose=global_verbose)
         assert_that(attach.id          , is_(prev_attach_rsrc["identifier"]))
-        assert_that(attach.date_created, is_(prev_attach_rsrc["date_created"]))
         assert_that(attach.title       , is_not(prev_attach_rsrc["title"]))
         assert_that(attach.description , is_not(prev_attach_rsrc["description"]))
+        assert_that(attach.resource["date_created"], is_(prev_attach_rsrc["date_created"]))
         _okay()
         
         # DELETE attachment
@@ -466,10 +467,11 @@ class IntegrationTestCase(unittest.TestCase):
         _starting("test upload_attachment() UPDATE ..")
         attach.file = File('tmp2', 'CONTENT!')
         page.upload_attachment(id=attach.id, file=attach.file, verbose=global_verbose)
-        assert_that(attach.id          , is_(prev_attach_rsrc["identifier"]))
-        assert_that(attach.date_created, is_(prev_attach_rsrc["date_created"]))
-        assert_that(attach.title       , is_not(prev_attach_rsrc["title"]))
-        assert_that(attach.description , is_not(prev_attach_rsrc["description"]))
+        assert_that(attach.id         , is_(prev_attach_rsrc["identifier"]))
+        assert_that(attach.title      , is_not(prev_attach_rsrc["title"]))
+        assert_that(attach.description, is_not(prev_attach_rsrc["description"]))
+        assert_that(attach.resource["date_created"], 
+										is_(prev_attach_rsrc["date_created"]))
         _okay()
         
         # DELETE attachment

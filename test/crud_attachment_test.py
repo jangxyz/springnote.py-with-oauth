@@ -296,6 +296,60 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         id_less_attach = springnote.Attachment(self.page, id=None)
         should_raise(springnote.SpringnoteError.InvalidOption, when=run)
 
+class AttributeConvertTestCase(unittest.TestCase):
+    def setUp(self):
+        self.o_Springnote = springnote.Springnote
+
+        # mock objects
+        springnote.Springnote = CMock()
+        self.m_get_response   = Mock()
+
+        # default Springnote.springnote_request behavior
+        springnote.Springnote.expects(at_least_once()).method('springnote_request') \
+            .will(return_value(self.m_get_response))
+
+        # default response behavior
+        self.m_get_response.status = 200
+        self.m_get_response.expects(at_least_once()).read() \
+            .will(return_value(sample_json))
+
+        self.auth = Mock()
+        self.auth.access_token   = ('ACCESS', 'TOKEN')
+        self.auth.consumer_token = ('CONSUMER', 'TOKEN')
+
+        self.page = springnote.Page(self.auth, id=123)
+        self.date_created = "2007/10/26 05:30:07 +0000"
+
+    def tearDown(self):
+        # restore original
+        springnote.Springnote = self.o_Springnote
+
+    @unittest.test
+    def converts_date_created_into_datetime_format(self):
+        ''' date_created converts to datetime format '''
+        # run 
+        attach = springnote.Attachment.from_json(sample_json, self.auth, self.page)
+        assert_that(attach.date_created, instance_of(springnote.datetime))
+
+    @unittest.test
+    def converts_datetime_format_with_localtimezone(self):
+        ''' date_created converts to datetime in localtime '''
+        # run 
+        date_created = "2007/10/26 05:30:07 +0000"
+        dt  = springnote.datetime(2007,10,26,5,30,7)
+        dt -= springnote.timedelta(seconds=springnote.time.timezone) # localize
+        attach = springnote.Attachment.from_json(sample_json, self.auth, self.page)
+        # verify 
+        assert_that(attach.date_created.timetuple(), is_(dt.timetuple()))
+
+    @unittest.test
+    def unconverted_datetime_is_in_resource(self):
+        ''' string format date_created is in resource '''
+        date_created = "2007/10/26 05:30:07 +0000"
+        # run & verify
+        attach = springnote.Attachment.from_json(sample_json, self.auth, self.page)
+        assert_that(attach.resource['date_created'], is_(date_created))
+
 
 if __name__ == '__main__':
     unittest.main()
