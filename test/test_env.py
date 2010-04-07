@@ -84,8 +84,6 @@ def should_call_method(object, method_name, when, method_type=None, arg=None, re
 
     # save
     orig = getattr(object, method_name)
-    #if method_type is not None: 
-    #    orig = method_type(orig)
 
     # patch
     setattr(object, method_name, is_called)
@@ -103,6 +101,8 @@ def should_call_method(object, method_name, when, method_type=None, arg=None, re
     except IsCalled:    # verify
         pass
     finally:            # restore
+        #if method_type is not None: 
+        #    orig = method_type(orig)
         setattr(object, method_name, orig)
 
 def should_not_call_method(object, method_name, when, method_type=None, arg=None):
@@ -127,6 +127,8 @@ def should_raise(exception, when):
         raise AssertionError, "did not raise exception %s" % exception
     except exception:
         pass # proper exception raised
+    except AssertionError, e:
+        raise e
     except Exception, e:
         error_msg = 'expected %s to be raised but instead got %s:"%s"' % (exception, type(e), e)
         raise AssertionError, error_msg

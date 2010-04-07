@@ -69,7 +69,7 @@ class SpringnoteError:
                 msg += ", " + self.msg
             return msg
         def format_body(self, e):
-            if isinstance(e, types.ListType):   return "\n".join(map(self.format_body, e))
+            if   isinstance(e, types.ListType): return "\n".join(map(self.format_body, e))
             elif isinstance(e, types.DictType): return " - %s: %s" % (e["error"]["error_type"], e["error"]["description"])
             else:                               return ": %s" % e
 
@@ -304,9 +304,9 @@ class SpringnoteResource(object):
     request_methods       = ['request']   # request methods for each resource
 
     def __init__(self, auth, parent=None):
-        self.auth     = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
-        self.parent   = parent
-        self.raw      = ''      # request의 결과로 가져온 raw data
+        self.auth   = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
+        self.parent = parent
+        self.raw    = ''      # request의 결과로 가져온 raw data
         for attr in self.springnote_attributes:
             setattr(self, attr, None)
         return
@@ -485,30 +485,40 @@ class SpringnoteResource(object):
 
     def requires_value_for(self, *attribute_names):
         ''' check value for given attribute names, raise exception if none.
-        recursive attribute names like 'parent.id' work '''
+
+        allows
+         - recursive attribute names like 'parent.id' 
+         - OR operation like ('id', 'index) 
+         - (parent.id, (id,index)) requires parent.id AND (id OR index)
+         '''
         # format error message
-        error_msg = map(lambda x: "'%s'" % x, attribute_names)
+        error_msg = []
+        for name in attribute_names:        
+            if isinstance(name, types.StringTypes): error_msg.append("'%s'" % name)
+            elif isinstance(name, types.TupleType): error_msg.append("one of " + " or ".join(map(lambda x: "'%s'" % x, name)))
         error_msg = " and ".join(error_msg)
-        if len(attribute_names) == 2:
-            error_msg = "both " + error_msg
-        elif len(attribute_names) > 2: 
-            error_msg = "all " + error_msg
         error_msg = "needs %s to perform the request" % error_msg
-        # check names recursively (eg, parent.id)
-        for name in attribute_names:
-            value = self
-            for subname in name.split('.'):
-                # test existence -- to find property method (like .file)
-                if not hasattr(value, subname):
-                    error_msg = "missing %s. " % name + error_msg
-                    raise SpringnoteError.InvalidOption(error_msg)
-                # test value
-                if not getattr(value, subname):
-                    error_msg = "needs proper value in %s. " % name + error_msg
-                    raise SpringnoteError.InvalidOption(error_msg)
-                value = getattr(value, subname)
-        else:
-            return True
+        # check value for names 
+        for name_tuple in attribute_names:
+            if isinstance(name_tuple, types.StringTypes): name_tuple = (name_tuple,)
+            # breaks if any name is found True
+            anyTrue = False
+            for name in name_tuple:             # name_tuple: (id, index)
+                value = self
+                # breaks if any subname is found False
+                for subname in name.split('.'): # parent.id => (parent, id)
+                    if not hasattr(value, subname) or getattr(value, subname) is None:
+                        error_msg = "needs proper value in %s. " % name + error_msg
+                        break
+                    value = getattr(value, subname) # update value
+                # checked every subname but was okay. can ignore other names
+                else:
+                    anyTrue = True
+                    break
+            # checked every name in tuple but none succeeded
+            else:
+                raise SpringnoteError.InvalidOption(error_msg)
+        return True
 
     @classmethod
     def _set_path_params(cls, page, id=None, params={}, format=True, plural=True):
@@ -819,6 +829,10 @@ class Comment(SpringnoteResource):
     ]
     request_methods = ['list']
 
+    def __init__(self, parent, auth=None):
+        SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
+        self.relation_is_part_of = parent.id
+
     @classmethod
     def list(cls, page, auth=None, verbose=None):
         path, params = cls._set_path_params(page)
@@ -832,6 +846,10 @@ class Collaboration(SpringnoteResource):
         "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
     ]
     request_methods = ['list']
+
+    def __init__(self, parent, auth=None):
+        SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
+        self.relation_is_part_of = parent.id
 
     @classmethod
     def list(cls, page, auth=None, verbose=None):
@@ -876,14 +894,16 @@ class Revision(SpringnoteResource):
     ]
     request_methods = ['get', 'list']
 
-    def __init__(self, parent, id=None, auth=None):
+    def __init__(self, parent, index=None, id=None, auth=None):
         SpringnoteResource.__init__(self, auth or parent.auth, parent=parent)
         self.id = id
         self.relation_is_part_of = parent.id
+        self.index = index
 
     @classmethod
     def list(cls, page, auth=None, verbose=None):
         ''' get list of page revisions
+
         NOTE: not all attributes are loaded, only the following are:
             [ date_created, identifier, description, creator ]
         ''' 
@@ -892,12 +912,25 @@ class Revision(SpringnoteResource):
                                     path, "GET", params, verbose=verbose)
 
     def get(self, verbose=None):
-        self.requires_value_for('parent.id', 'id')
+        ''' get specific revision of a page 
+        
+        if id is given then fetch the corresponding rev, or
+        if index is given first fetch the entire revision list, 
+        sort it by create_date and fetch the index-th rev.
+        '''
+        self.requires_value_for('parent.id', ('id','index'))
+        if self.id is None:
+            revs = self.list(self.parent, verbose=verbose)
+            revs = sorted(revs, key=lambda x: x.date_created)
+            if len(revs) < - self.index:
+                error_msg = "there is no %d-th revision, only %d" % (self.index, len(revs))
+                raise SpringnoteError.InvalidOption(error_msg)
+            self.id = revs[self.index].id
         path, params = self._set_path_params(self.parent, id=self.id)
         return self.request(path, "GET", params, verbose=verbose)
 
 
-# black-and-white magic 
+# black-and-white magic: dynamically build methods into class
 def run_resource_method(parent, function_name, resource, method_name, *args, **kwarg):
     ''' detach function_name and call appropriate resource.method(parent) '''
     method  = getattr(resource, method_name)

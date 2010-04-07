@@ -294,15 +294,18 @@ revs[0].description    # 생성되었습니다, 따위의 설명이 있어요.
 
 h3. 한 리비전 보기 (get)
 
-정확하게 과거의 한 때로 돌아갑니다. 변경 이력 description은 없지만, 대신 source를 직접 확인해볼 수 있습니다. revision의 id를 알아야 합니다.
+정확하게 과거의 한 때로 돌아갑니다. 변경 이력 description은 없지만, 대신 source를 직접 확인해볼 수 있습니다. revision의 id로 직접 가져오거나 순서(index)를 알려줄 수 있습니다.
 
 <pre><code>revs = Revision.list(page)
 rev  = Revision(revs[-3].id).get()
 page.source = rev.source    # 과거 내용으로 덮어씀
 page.save()                 # 어이쿠!
 
-# 순서로 가져올 수가 없어서 조금 불편하네요;
+# id를 알면 바로 가져올 수 있습니다.
 page.get_revision(id=revs[-3].id)
+
+# id를 몰라도 순서를 알면 가져올 수 있습니다. 내부적으로 list request를 통해 id를 찾습니다.
+page.get_revision(index=-3)
 </code></pre>
 
 h2. Lock 리소스

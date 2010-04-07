@@ -19,14 +19,14 @@ class SpringnoteResourceTestCase(unittest.TestCase):
         # mock
         springnote.Springnote = mock_class_Springnote()
         # http_response mock
-        http_response = Mock()
-        http_response.status = 200
-        http_response.expects(once()).read() \
+        self.http_response = Mock()
+        self.http_response.status = 200
+        self.http_response.expects(once()).read() \
             .will(return_value(self.sample_json))
         # springnote request mock
         self.expects_springnote_request = \
             springnote.Springnote.expects(once()).method('springnote_request') \
-                .will(return_value(http_response))
+                .will(return_value(self.http_response))
         #
         self.sn   = springnote.Springnote()
         self.page = springnote.Page(self.sn, id=123)
@@ -42,7 +42,7 @@ class SpringnoteResourceTestCase(unittest.TestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        resourceClass.list(auth=self.sn, page=self.page)
+        resourceClass.list(page=self.page)
 
     def verify_id_is_same_with_identifier(self, new_cls):
         id = 123
@@ -67,7 +67,7 @@ class CommentTestCase(SpringnoteResourceTestCase):
     @unittest.test
     def has_springnote_attributes(self):
         ''' Comment has attributes for springnote '''
-        instance = Comment(auth=self.sn, parent=self.page)
+        instance = Comment(parent=self.page)
         assert_that(getattr(instance, 'identifier',          False), is_not(False))
         assert_that(getattr(instance, 'date_created',        False), is_not(False))
         assert_that(getattr(instance, 'relation_is_part_of', False), is_not(False))
@@ -96,7 +96,7 @@ class CollaborationTestCase(SpringnoteResourceTestCase):
     def has_springnote_attributes(self):
         ''' Collaboration has attributes for springnote '''
         # you actually have no reason to make an instance this way
-        instance = Collaboration(auth=self.sn, parent=self.page)
+        instance = Collaboration(parent=self.page)
         assert_that(getattr(instance, 'rights_holder', False), is_not(False))
         assert_that(getattr(instance, 'access_rights', False), is_not(False))
         assert_that(getattr(instance, 'date_created',  False), is_not(False))
@@ -125,7 +125,7 @@ class LockTestCase(SpringnoteResourceTestCase):
     def has_springnote_attributes(self):
         ''' Lock has attributes for springnote '''
         # you actually have no reason to make an instance this way
-        instance = Lock(auth=self.sn, parent=self.page)
+        instance = Lock(parent=self.page)
         assert_that(getattr(instance, 'creator',             False), is_not(False))
         assert_that(getattr(instance, 'date_expired',        False), is_not(False))
         assert_that(getattr(instance, 'relation_is_part_of', False), is_not(False))
@@ -139,7 +139,7 @@ class LockTestCase(SpringnoteResourceTestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        Lock(auth=self.sn, parent=self.page).get()
+        Lock(parent=self.page).get()
 
     @unittest.test
     def acquire_calls_proper_path_and_params(self):
@@ -150,7 +150,7 @@ class LockTestCase(SpringnoteResourceTestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        Lock(auth=self.sn, parent=self.page).acquire()
+        Lock(parent=self.page).acquire()
 
 
 from springnote import Revision
@@ -165,7 +165,7 @@ class RevisionTestCase(SpringnoteResourceTestCase):
     @unittest.test
     def has_springnote_attributes(self):
         ''' Revision has attributes for springnote '''
-        instance = Revision(auth=self.sn, parent=self.page)
+        instance = Revision(parent=self.page)
         assert_that(getattr(instance, 'identifier',          False), is_not(False))
         assert_that(getattr(instance, 'description',         False), is_not(False))
         assert_that(getattr(instance, 'creator',             False), is_not(False))
@@ -181,7 +181,7 @@ class RevisionTestCase(SpringnoteResourceTestCase):
 
     @unittest.test
     def get_calls_proper_path_and_params(self):
-        ''' Revision().get() calls GET /pages/123/revisions/4567.json '''
+        ''' Revision(id=4567).get() calls GET /pages/123/revisions/4567.json '''
         id = 4567
         url_pattern = re.compile("/pages/%d/revisions/%d[.]" % (self.page.id, id))
         self.expects_springnote_request.with_at_least(
@@ -189,8 +189,98 @@ class RevisionTestCase(SpringnoteResourceTestCase):
             url    = string_contains(url_pattern)
         )
         # run
-        Revision(auth=self.sn, parent=self.page, id=id).get()
+        Revision(parent=self.page, id=id).get()
 
+    @unittest.test
+    def should_have_parent_id_and_one_of_index_or_id_and_parent_id(self):
+        ''' Revision.get() without parent.id or (id|index) raises exception '''
+        # (parent.id, id) is okay
+        rev = Revision(self.page, id=3)
+        should_call_method(springnote.Revision, 'request', when=lambda: rev.get())
+
+        # (parent.id, index) is okay
+        rev = Revision(self.page, index=-3)
+        should_call_method(springnote.Revision, 'list', when=lambda: rev.get())
+
+        # (parent.id=None, id or index) is NOT okay
+        idless_page = springnote.Page(self.page.auth, None) 
+        pageid_less_rev = springnote.Revision(idless_page, id=123)
+        should_raise(springnote.SpringnoteError.InvalidOption, 
+                    when=lambda: pageid_less_rev.get())
+
+        # (parent.id, id=None, index=None) is NOT okay
+        id_less_rev = springnote.Revision(self.page, id=None, index=None)
+        should_raise(springnote.SpringnoteError.InvalidOption, 
+                    when=lambda: id_less_rev.get())
+
+
+class RevisionWithIndexTestCase(unittest.TestCase):
+    def setUp(self):
+        self.sn   = springnote.Springnote()
+        self.page = springnote.Page(self.sn, id=123)
+
+    @unittest.test
+    def get_with_index_calls_list(self):
+        ''' Revision(index=-2).get() calls list() and request() with index id '''
+        index   = -2
+        verbose = True
+        rev     = Revision(parent=self.page, index=index)
+        run = lambda: rev.get(verbose=verbose)
+
+        # calls Revision.list
+        should_call_method(springnote.Revision, 'list', when=run,
+            arg=with_(eq(springnote.Revision), eq(self.page), verbose=eq(verbose)),
+            method_type=classmethod,
+        )
+
+    @unittest.test
+    def get_with_index_calls_get_with_id_from_list(self):
+        ''' Revision(index=-2).get() calls request with -2th id of revisions '''
+        # save
+        o_revision_list = springnote.Revision.list
+
+        page    = self.page
+        index   = -2
+        id      = 4567
+        verbose = True
+        
+        rev1 = Revision(parent=page, id=id)
+        rev2 = Revision(parent=page, id=id+1)
+        rev1.date_created = 1
+        rev2.date_created = 2
+        springnote.Revision.list = lambda *args, **kwarg: [rev2, rev1]
+
+        # calls revision.get()
+        rev = Revision(parent=page, index=index)
+        run = lambda: rev.get(verbose=verbose)
+        url = "/pages/%d/revisions/%d." % (page.id, id)
+        should_call_method(springnote.Revision, 'request', when=run,
+            arg=with_at_least(eq(rev), contains_string(url), verbose=eq(verbose)))
+
+        # restore
+        springnote.Revision.list = o_revision_list
+
+    @unittest.test
+    def get_with_too_large_index_raises_exception(self):
+        ''' Revision(index=-10000).get() with no such revision raises error '''
+        # save
+        o_revision_list = springnote.Revision.list
+
+        page    = self.page
+        index   = -10000        # too big!
+        id      = 4567
+        verbose = True
+        
+        rev1, rev2 = Revision(parent=page, id=id), Revision(parent=page, id=id+1)
+        rev1.date_created, rev2.date_created = 1, 2
+        springnote.Revision.list = lambda *args, **kwarg: [rev2, rev1]
+
+        # calls revision.get()
+        run = lambda: Revision(parent=page, index=index).get(verbose=verbose)
+        should_raise(springnote.SpringnoteError.InvalidOption, when=run)
+
+        # restore
+        springnote.Revision.list = o_revision_list
 
 if __name__ == '__main__':
     unittest.main()
