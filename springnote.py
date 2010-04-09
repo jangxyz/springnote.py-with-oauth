@@ -85,36 +85,36 @@ def is_file_type(data):
 
 
 class Springnote(object):
-    ''' Springnote의 constant를 담고 request 등 기본적인 업무를 하는 클래스 '''
+    ''' handles every kind of requests sent to springnote.com, both 
+    Authentication and Resources, using OAuth. '''
     signature_method       = oauth.OAuthSignatureMethod_HMAC_SHA1()
     BOUNDARY               = 'AaB03x' 
     DEFAULT_CONTENT_TYPE   = 'application/json'
     MULTIPART_CONTENT_TYPE = 'multipart/form-data; boundary=%s' % BOUNDARY
 
     def __init__(self, access_token=None, consumer_token=(DEFAULT_CONSUMER_TOKEN_KEY, DEFAULT_CONSUMER_TOKEN_SECRET), verbose=None):
-        """ consumer token을 초기화하고, access token도 있으면 
-        초기화해서 바로 사용할 수 있습니다.
+        """ intialize consumer token, and optioanlly an access token.
         
-         - consumer_token: 개발자가 정의하고 싶은 consumer token을 
-             (key, secret) tuple로 넣어줍니다. 
-             넣지 않으면 라이브러리의 기본 token을 사용합니다.
-         - access_token: 사용자가 전에 승인하여 얻은 access token이
-             있으면 그것을 바로 넣어줄 수 있습니다. 
-             만료가 되지 않았다면 바로 사용할 수 있습니다.
-             없으면 사용자 동의 하에 새로 받을 수 있습니다.
-        """
+        If consumer token is not given, it uses basic consumer token (registered 
+        for the library itself). However, you need to specify the access token, 
+        either previously saved or acquired through user authorization later on,
+        to request the resources """
         self.consumer_token = self.format_token(consumer_token)
         self.set_access_token(access_token)
 
         self.verbose = verbose
 
     def set_access_token(self, *args):
-        """ 직접 access token을 지정합니다. 
+        """ sets the access token. 
+        can take various formats, arguments of strings, a tuple of key and 
+        secret, or a class with .key and .secret attribute
         
         >> sn = Springnote()
         >> sn.set_access_token(('SOME_ACCESS', 'TOKEN'))
         <oauth.OAuthToken object ...>
-        >> sn.set_access_token('SOME_ACCESS', 'TOKEN')
+        >> token = sn.set_access_token('SOME_ACCESS', 'TOKEN')
+        <oauth.OAuthToken object ...>
+        >> sn.set_access_token(token)
         <oauth.OAuthToken object ...>
         """
         self.access_token = self.format_token(*args)
@@ -149,7 +149,7 @@ class Springnote(object):
         return request_token
     
     def authorize_url(self, request_token, verbose=None, callback=None):
-        """ request token을 받고 난 뒤, user에게 승인받을 url을 알려줍니다. """
+        """ returns URL that user has to visit and authorize to get access token """
         params = { "oauth_token": request_token.key }
         if callback:
             params["oauth_callback"] = callback
@@ -183,7 +183,7 @@ class Springnote(object):
 
     @staticmethod
     def format_token(*args):
-        """ 사용자가 OAuth.token이든 tuple이든 보내면 포맷을 잡아줍니다 """
+        """ handles various formats of tokens """
         # (('KEY', 'SECRET'))
         if len(args) == 1 and getattr(args[0], '__len__', False):
             args = args[0]
@@ -200,9 +200,7 @@ class Springnote(object):
         return
 
     def oauth_request(self, method, url, params=None, sign_token=None, verbose=False):
-        ''' springnote_request에서 사용할 OAuth request를 생성합니다. 
-
-        여기서 생성된 oauth request는 문자열 형태로 header에 포함됩니다.  '''
+        ''' generates OAuth request, which is inserted in headers at springnote_request '''
         sign_token = self.format_token(sign_token or self.access_token)
         request = oauth.OAuthRequest.from_consumer_and_token(
             self.consumer_token, sign_token, method, url, params or {})
@@ -222,10 +220,16 @@ class Springnote(object):
 
     def springnote_request(self, method, url, params={}, headers=None, body=None, 
             sign_token=None, secure=False, verbose=False):
-        """ Springnote에서 사용하는 request를 생성합니다. 
+        """ sends a request to springnote.com. Used in every case to communicate 
+        with springnote.com, including both authentication and requesting for 
+        springnote resources.
 
-        oauth 인증을 위해 request token과 access token을 요청할 때와
-        일반적인 springnote resource 요청할 때 사용합니다.
+        sign_token is only None when first fetching a request token, uses request 
+        token until it fetches an access token, and uses access token to fetch 
+        the resources.
+
+        secure is only True during authorization, and must be False at resource 
+        request.
 
         >>> access_token = oauth.OAuthToken('key', 'secret')
         >>> http_response = Springnote(access_token).springnote_request( \
@@ -269,12 +273,14 @@ class Springnote(object):
     @staticmethod
     def set_headers(headers, oauth_request, method, body):
         headers = headers or {}
-        # when POST or PUT attachment
-        if method != "GET" and is_file_type(body):
-            headers.setdefault('Content-Type', Springnote.MULTIPART_CONTENT_TYPE)
-        # normal
-        else:
-            headers.setdefault('Content-Type', Springnote.DEFAULT_CONTENT_TYPE)
+        content_type = Springnote.DEFAULT_CONTENT_TYPE
+        if method != "GET" and is_file_type(body): # when POST or PUT attachment
+            content_type = Springnote.MULTIPART_CONTENT_TYPE
+        headers.setdefault('Content-Type', content_type)
+        #    headers.setdefault('Content-Type', Springnote.MULTIPART_CONTENT_TYPE)
+        ## normal
+        #else:
+        #    headers.setdefault('Content-Type', Springnote.DEFAULT_CONTENT_TYPE)
         headers.update(oauth_request.to_header())
         return headers
 
@@ -298,15 +304,17 @@ class Springnote(object):
 ## -- OOP layer
 ##
 class SpringnoteResource(object):
-    """ springnote에서 사용하는 리소스의 부모 클래스. 
-        Page, Attachment 등이 이 클래스를 상속합니다 """
+    """ abstract class for resources used in springnote. Page, Attachment and the
+    rest inherits this class.
+    provides various wrapper methods that calls Springnote.springnote_request().
+    """
     springnote_attributes = []            # springnote attributes for each resource
     request_methods       = ['request']   # request methods for each resource
 
     def __init__(self, auth, parent=None):
-        self.auth   = auth    # .access_token과 .consumer_token을 갖고 있는 객체. Springnote 이면 충분하다.
-        self.parent = parent
-        self.raw    = ''      # request의 결과로 가져온 raw data
+        self.auth   = auth    # has .access_token and .consumer_token
+        self.parent = parent  # parent Page object
+        self.raw    = ''      # raw data fetched from request
         for attr in self.springnote_attributes:
             setattr(self, attr, None)
         return
@@ -462,10 +470,7 @@ class SpringnoteResource(object):
 
 
     def _set_resource(self, resource_dict):
-        """ resource마다 따로 필요한 후처리 작업을 해줍니다. 
-
-        각 resource마다 이 메소드를 재정의해서 필요한 후처리를 할 수 있습니다. 
-        """
+        """ absorbs the dictionary data into its attributes """
         for key in self.springnote_attributes:
             # key may not exist in given dictionary. skip
             if key not in resource_dict:
@@ -484,13 +489,13 @@ class SpringnoteResource(object):
     resource = property(_get_resource, _set_resource)
 
     def requires_value_for(self, *attribute_names):
-        ''' check value for given attribute names, raise exception if none.
+        """ check value for given attribute names, raise exception if none.
 
         allows
          - recursive attribute names like 'parent.id' 
          - OR operation like ('id', 'index) 
          - (parent.id, (id,index)) requires parent.id AND (id OR index)
-         '''
+        """
         # format error message
         error_msg = []
         for name in attribute_names:        
