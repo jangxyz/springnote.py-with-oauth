@@ -68,7 +68,7 @@ OAuth 인증 방식을 이용합니다.
         page = sn.get_page(some_id)
         page.title  = "코펜하겐 기후 변화가 동아시아 경제에 미치는 영향"
         page.source = "심각합니다."
-        page.tags   = "썰렁유머"
+        page.tags   = ["썰렁유머"]
         page.save()
 
 * 썰렁 유머 따위 사라져버려~ [삭제]

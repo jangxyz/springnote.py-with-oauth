@@ -8,7 +8,7 @@
 """
 __author__  = "Jang-hwan Kim"
 __email__   = "janghwan at gmail dot com"
-__version__ = 0.7
+__version__ = 0.8
 
 import env
 import oauth, sys, types
@@ -603,7 +603,7 @@ class Page(SpringnoteResource):
         "title",                # 페이지 이름  예) TestPage
         "source",               # 페이지 원본.  예) <p> hello </p>
         "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
-        "tags"                  # 페이지에 붙은 태그  예) tag1,tag2
+        "tags"                  # 페이지에 붙은 태그  예) [tag1,tag2]
     ]
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
     # arguments to check parameter validity
@@ -785,7 +785,7 @@ class Attachment(SpringnoteResource):
         "identifier",          # 첨부 고유 ID 예) 2
         "title",               # 첨부 파일 이름 예) test.jpg
         "description",         # 첨부 파일 크기(단위는 바이트) 예) 8000
-        "date_created",        # 첨부 최초 생성 일시(UTC) 예) 2008-01-30T10:11:16Z
+        "date_created",        # 첨부 최초 생성 일시(UTC) 예) datetime(2008, 1, 30, 10, 11, 16)
         "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
     ]
     request_methods = ['list', 'get', 'upload', 'download', 'delete']
@@ -872,7 +872,7 @@ class Attachment(SpringnoteResource):
 class Comment(SpringnoteResource):
     springnote_attributes = [
         "identifier",          # 고유 ID 예) 1
-        "date_created",        # 최초 생성 일시(UTC)예) 2008-01-30T10:11:16Z
+        "date_created",        # 최초 생성 일시(UTC)예) datetime(2008, 1, 30, 10, 11, 16)
         "relation_is_part_of", # 첨부 파일이 속한 페이지의 ID 예) 1
         "creator",             # 작성자 nickname
         "source",              # 내용
@@ -893,7 +893,7 @@ class Collaboration(SpringnoteResource):
     springnote_attributes = [
         "rights_holder", # 협업자의 OpenID
         "access_rights", # 협업자가 가진 권한 예) reader, writer, guest, creator
-        "date_created",  # 협업을 시작한 시간(UTC) 예) 2008-01-30T10:11:16Z
+        "date_created",  # 협업을 시작한 시간(UTC) 예) datetime(2008, 1, 30, 10, 11, 16)
     ]
     request_methods = ['list']
 
@@ -911,7 +911,7 @@ class Collaboration(SpringnoteResource):
 class Lock(SpringnoteResource):
     springnote_attributes = [
         "creator",             # 현재 페이지를 수정중인 사용자 OpenID
-        "date_expired",        # 잠금이 해제되는 (예상) 시간(UTC) 예) 2008-01-30T10:11:16Z
+        "date_expired",        # 잠금이 해제되는 (예상) 시간(UTC) 예) datetime(2008, 1, 30, 10, 11, 16)
         "relation_is_part_of", # 잠금 리소스가 속한 페이지의 ID
     ]
     request_methods = ['get', 'acquire']
@@ -937,7 +937,7 @@ class Revision(SpringnoteResource):
     springnote_attributes = [
         "identifier",          # 히스토리 고유 ID
         "creator",             # 만든 사람 OpenID
-        "date_created",        # 생성된 시간(UTC) 예) 2008-01-30T10:11:16Z
+        "date_created",        # 생성된 시간(UTC) 예) datetime(2008, 1, 30, 10, 11, 16)
         "relation_is_part_of", # 히스토리가 속한 페이지의 ID
         "source",              # 페이지 내용          -- only at get()
         "description",         # 히스토리에 대한 설명 -- only at list()
