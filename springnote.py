@@ -335,7 +335,8 @@ class SpringnoteResource(object):
         instance = self.handle_request(auth=self.auth, parent=self.parent,
                     path=path, method=method, params=params, headers=headers, 
                     data=data, process_response=process_response, verbose=verbose)
-        self.replace_with(instance)
+        self.copy(instance)
+        del instance
         return self
 
     @classmethod
@@ -444,7 +445,7 @@ class SpringnoteResource(object):
 
         raise SpringnoteError.ParseError('unable to build resource from: ' + data)
 
-    def replace_with(self, obj):
+    def copy(self, obj):
         ''' copy springnote_attributes and raw from object given '''
         for attr in self.springnote_attributes:
             value = getattr(obj, attr, None)
@@ -452,7 +453,6 @@ class SpringnoteResource(object):
                 setattr(self, attr, value)
         setattr(self, 'raw', obj.raw)
 
-        del obj
         return self
 
     @staticmethod
@@ -462,7 +462,6 @@ class SpringnoteResource(object):
         def repl(match):
             return unichr(int(match.group(1), 16))
         return re.sub(r"\\u([0-9a-fA-F]{4})", repl, s)
-
 
     def _set_resource(self, resource_dict):
         """ absorbs the dictionary data into its attributes """
@@ -603,7 +602,8 @@ class Page(SpringnoteResource):
         "title",                # 페이지 이름  예) TestPage
         "source",               # 페이지 원본.  예) <p> hello </p>
         "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
-        "tags"                  # 페이지에 붙은 태그  예) [tag1,tag2]
+        "tags",                 # 페이지에 붙은 태그  예) [tag1,tag2]
+        "uri",                  # 페이지의 웹주소
     ]
     writable_attributes = ["title", "source", "relation_is_part_of", "tags"]
     # arguments to check parameter validity
@@ -652,11 +652,19 @@ class Page(SpringnoteResource):
             resource_dict['tags'] = ','.join(self.tags)
         return resource_dict
     def _set_resource(self, resource_dict):
-        """ add feature: convert content of .tags to list """
+        """ add feature: convert content of .tags into list """
         super(Page, self)._set_resource(resource_dict)
         if "tags" in resource_dict:
             self._set_tags(resource_dict["tags"])
+        self.note = self.uri.split('//', 1)[1].split('.', 1)[0]
     resource = property(_get_resource, _set_resource)
+
+    def copy(self, obj):
+        ''' copy springnote_attributes and raw from object given '''
+        super(Page, self).copy(obj)
+        setattr(self, 'note', obj.note)
+
+        return self
 
     @classmethod
     def _set_path_params(cls, page=None, **kwarg):
@@ -691,14 +699,6 @@ class Page(SpringnoteResource):
                 raise SpringnoteError.InvalidOption(error_msg)
         return params
 
-    def writable_resource(self):
-        data = {}
-        for attr in self.writable_attributes:
-            value = getattr(self, attr, False)
-            if value:
-                data[attr] = value
-        return data
-
     ## -- request methods
     def get(self, verbose=None):
         """ fetch the page with current id. 
@@ -714,7 +714,6 @@ class Page(SpringnoteResource):
         if self.id: method = "PUT"  # update existing page
         else:       method = "POST" # create new page
         path, params = self._set_path_params(self, id=self.id, note=self.note)
-        #data = self.writable_resource()
         data = self.to_json()
     
         self.request(path, method, params=params, data=data, verbose=verbose)

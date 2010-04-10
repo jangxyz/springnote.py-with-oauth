@@ -44,7 +44,8 @@ springnote_attributes = [
        "title",                # 페이지 이름  예) TestPage
        "source",               # 페이지 원본  예) <p>hello</p>
        "relation_is_part_of",  # 이 페이지의 부모 페이지의 ID  예) 2
-       "tags"                  # 페이지에 붙은 태그  예) [tag1,tag2]
+       "tags",                 # 페이지에 붙은 태그  예) [tag1,tag2]
+       "uri",                  # 페이지의 웹주소
 ]
 
 request_methods = ["get", "save", "delete", "list", "search", "get_root", "get_parent", "get_children"]
