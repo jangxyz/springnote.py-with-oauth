@@ -90,17 +90,18 @@ class ParseErrorTestCase(unittest.TestCase):
     @unittest.test
     def from_json_should_not_raise_parse_error_on_valid_json(self):
         ''' from_json should not raise ParseError on valid json data '''
-        good_json = '{"page": {' \
-            '"rights": null, ' \
-            '"source": "\\u003Cp\\u003ENone\\u003C/p\\u003E\\n", ' \
-            '"creator": "http://deepblue.myid.net/", ' \
-            '"date_created": "2007/10/26 05:30:08 +0000", ' \
+        good_json = '{"page": {'                                    \
+            '"rights": null, '                                      \
+            '"source": "\\u003Cp\\u003ENone\\u003C/p\\u003E\\n", '  \
+            '"creator": "http://deepblue.myid.net/", '              \
+            '"date_created": "2007/10/26 05:30:08 +0000", '         \
             '"contributor_modified": "http://deepblue.myid.net/", ' \
-            '"date_modified": "2008/01/08 10:55:36 +0000", ' \
-            '"relation_is_part_of": 1, ' \
-            '"identifier": 4, ' \
-            '"tags": "test", ' \
-            '"title": "TestPage" ' \
+            '"date_modified": "2008/01/08 10:55:36 +0000", '        \
+            '"relation_is_part_of": 1, '                            \
+            '"identifier": 4, '                                     \
+            '"tags": "test", '                                      \
+            '"title": "TestPage", '                                 \
+            '"uri": "http://deepblue.springnote.com/pages/4"'       \
         '}}'
         
         springnote.Page.from_json(data=good_json, auth=None)

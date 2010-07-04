@@ -22,19 +22,53 @@ sample_json = '{"attachment": {' \
     '"title": "Attachment.jpg"' \
 '}}'
 
+class AttachmentResponseMockedTestCase(unittest.TestCase):
+    ''' mock Springnote instance and http response 
+        has: self.auth '''
+    def setUp(self):
+        # mock http response
+        http_response = Mock()
+        http_response.status = 200
+        http_response.expects(at_least_once()).read() \
+            .will(return_value(sample_json))
+
+        # mock Springnote instance
+        self.auth = Mock()
+        self.auth.access_token   = ('ACCESS', 'TOKEN')
+        self.auth.consumer_token = ('CONSUMER', 'TOKEN')
+        self.auth.expects(at_least_once()).method('springnote_request') \
+            .will(return_value(http_response))
+
+class AttachmentDownloadResponseMockedTestCase(unittest.TestCase):
+    def setUp(self):
+        # mock http response
+        file_content = 'FILE CONTENT'
+        http_response = Mock()
+        http_response.status = 200
+        http_response.expects(once()).read().will(return_value(file_content))
+
+        # mock Springnote instance
+        self.auth = Mock()
+        self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
+        self.expects_springnote_request = \
+            self.auth.expects(once()).method('springnote_request') \
+                .will(return_value(http_response))
+
+
 class AttachmentResourceTestCase(unittest.TestCase):
     def setUp(self):    
         springnote.Springnote = mock_class_Springnote()
 
-        # mock
-        # http_response mock
+        # mock http response
         http_response = Mock()
         http_response.status = 200
-        http_response.expects(once()).read() \
-            .will(return_value(sample_json))
-        # springnote request mock
+        http_response.expects(once()).read().will(return_value(sample_json))
+
+        # mock Springnote instance
+        self.auth = Mock()
+        self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
         self.expects_springnote_request = \
-            springnote.Springnote.expects(once()).method('springnote_request') \
+            self.auth.expects(once()).method('springnote_request') \
                 .will(return_value(http_response))
 
         # file object mock
@@ -53,10 +87,6 @@ class AttachmentResourceTestCase(unittest.TestCase):
         self.file_obj.expects(at_least_once()).read() \
             .will(return_value(file_content))
 
-
-        #
-        self.auth = Mock()
-        self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
         self.page   = springnote.Page(self.auth, id=1)
         self.attach = springnote.Attachment(self.page, id=123)
 
@@ -155,8 +185,7 @@ class AttachmentResourceTestCase(unittest.TestCase):
         self.expects_springnote_request.with_at_least(
             method=eq("PUT"), url=string_contains(url_pattern),
             body=string_contains(self.file_obj.read())
-        ) \
-        .after('wrap_file_to_body')
+        ) .after('wrap_file_to_body', springnote.Springnote)
         # run
         self.attach.upload()
 
@@ -211,58 +240,12 @@ class AttachmentResourceTestCase(unittest.TestCase):
         attach.identifier = id
         assert_that(attach.id, is_(id))
 
-class AttachmentAuthTestCase(unittest.TestCase):
-    @unittest.test
-    def use_auth_if_given(self):
-        ''' use given auth '''
-        auth = Mock()
-        auth.access_token, auth.consumer_token = ('AT', 'CT')
-        new_auth = Mock()
-        new_auth.access_token, new_auth.consumer_token = ('NEW_AT', 'NEW_CT')
 
-        page = springnote.Page(auth, id=1)
-        attach = springnote.Attachment(auth=new_auth, parent=page)
-        should_call_method(springnote, 'Springnote',
-            when = lambda: attach.request("some/path"),
-            arg  = with_(eq(new_auth.access_token), eq(new_auth.consumer_token)))
-
-    @unittest.test
-    def use_tokens_from_parent_if_not_given(self):
-        ''' use parent page's access token if none is given '''
-        auth = Mock()
-        auth.access_token, auth.consumer_token = ('AT', 'CT')
-
-        page = springnote.Page(auth, id=1)
-        attach = springnote.Attachment(auth=None, parent=page)
-        should_call_method(springnote, 'Springnote',
-            when = lambda: attach.request("some/path"),
-            arg  = with_(eq(auth.access_token), eq(auth.consumer_token)))
-
-
-class AttachmentDownloadTestCase(unittest.TestCase):
+class AttachmentDownloadTestCase(AttachmentDownloadResponseMockedTestCase):
     def setUp(self):    
-        springnote.Springnote = mock_class_Springnote()
-
-        # mock
-        # file object mock
-        file_content = 'FILE CONTENT'
-        http_response = Mock()
-        http_response.status = 200
-        http_response.expects(once()).read() \
-            .will(return_value(file_content))
-        # springnote request mock
-        self.expects_springnote_request = \
-            springnote.Springnote.expects(once()).method('springnote_request') \
-                .will(return_value(http_response))
-
-        #
-        self.auth = Mock()
-        self.auth.access_token, self.auth.consumer_token = ('AT', 'CT')
+        super(AttachmentDownloadTestCase, self).setUp()
         self.page   = springnote.Page(self.auth, id=1)
         self.attach = springnote.Attachment(self.page, id=123)
-
-    def tearDown(self): 
-        springnote.Springnote = restore_class_Springnote()
 
     @unittest.test
     def download_calls_proper_path_and_params(self):
@@ -296,33 +279,12 @@ class AttachmentDownloadTestCase(unittest.TestCase):
         id_less_attach = springnote.Attachment(self.page, id=None)
         should_raise(springnote.SpringnoteError.InvalidOption, when=run)
 
-class AttributeConvertTestCase(unittest.TestCase):
+class AttributeConvertTestCase(AttachmentResponseMockedTestCase):
     def setUp(self):
-        self.o_Springnote = springnote.Springnote
-
-        # mock objects
-        springnote.Springnote = CMock()
-        self.m_get_response   = Mock()
-
-        # default Springnote.springnote_request behavior
-        springnote.Springnote.expects(at_least_once()).method('springnote_request') \
-            .will(return_value(self.m_get_response))
-
-        # default response behavior
-        self.m_get_response.status = 200
-        self.m_get_response.expects(at_least_once()).read() \
-            .will(return_value(sample_json))
-
-        self.auth = Mock()
-        self.auth.access_token   = ('ACCESS', 'TOKEN')
-        self.auth.consumer_token = ('CONSUMER', 'TOKEN')
+        super(AttributeConvertTestCase, self).setUp()
 
         self.page = springnote.Page(self.auth, id=123)
         self.date_created = "2007/10/26 05:30:07 +0000"
-
-    def tearDown(self):
-        # restore original
-        springnote.Springnote = self.o_Springnote
 
     @unittest.test
     def converts_date_created_into_datetime_format(self):
