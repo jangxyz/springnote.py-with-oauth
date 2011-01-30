@@ -10,20 +10,37 @@ __author__  = "Jang-hwan Kim"
 __email__   = "janghwan at gmail dot com"
 __version__ = 0.8
 
-import env
-import oauth, sys, types
-import re, time
-from datetime import datetime, timedelta
-import httplib, urllib, urlparse, socket, os.path
 
-# try importing json: simplejson -> json -> FAIL
+import sys
+import os
+import types
+import re
+import time
+from datetime import datetime, timedelta
+import httplib, urllib, urlparse, socket
+
+def real_path(filename):
+    ''' return absolute and canonical path of .py file '''
+    if filename.endswith(".pyc"): filename = filename.rstrip('c')
+    return os.path.abspath(os.path.realpath(filename))
+# import absolute working directory to sys.path
+if os.path.dirname(real_path(__file__)) not in sys.path:
+    sys.path.append( os.path.dirname(real_path(__file__)) )
+
+from lib import oauth
+
+# try importing json: simplejson -> json -> default simplejson
 try:
     import simplejson as json
 except ImportError:
     try:
         import json
     except ImportError:
-        sys.exit("cannot find json library. try installing simplejson")
+        sys.stderr.write("cannot find system json library. using default\n")
+        sys.path.append( os.path.realpath(os.path.join(os.path.dirname(__file__), 'lib')) )
+        import simplejson as json
+        sys.path.pop()
+        #sys.exit("cannot find json library. try installing simplejson")
 
 
 # default consumer token (as springnote python library)
@@ -42,6 +59,7 @@ AUTHORIZATION_URL = 'https://%s/oauth/authorize'               % HOST
 # default options
 default_verbose = False
 default_dry_run = False
+
 
 
 # exceptions
